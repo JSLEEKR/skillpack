@@ -47,9 +47,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Dedicated exit code `Security = 6` for signature tamper / verification
   failure.
 
+### Integrity hardening (Eval Cycle G)
+
+- Canonical hash pre-image rewritten: every string value is now
+  `strconv.Quote`-escaped and multi-element fields (`tools`, `requires`)
+  emit one indexed line per element. The body is length-prefixed with
+  `body.len=N`. This removes three classes of hash collisions (comma-joined
+  tools, pipe-joined requires, `=`-separated frontmatter, newline folding)
+  that could have let two semantically distinct skills share the same
+  sha256 fingerprint.
+- `skillpack keygen --priv X --pub X` now refuses (Usage error) before
+  writing — previously the second write silently destroyed the first.
+  Check compares `filepath.Abs` so `./k` and `k` are also caught.
+- `skillpack keygen` refuses to overwrite existing key files unless
+  `--force` is passed (Eval Cycle E hardening).
+- `lockfile.Unmarshal` now rejects every non-positive `"version"` value.
+  Previously only `version == 0` was caught.
+
 ### Quality
 
-- **205 tests** across unit and integration layers (192 initial + 13 from
-  Eval Cycle B).
+- **216 tests** across unit and integration layers (192 initial + 24
+  across Eval Cycles B through H, including 3 doc-accuracy meta-tests).
 - `go vet` clean, race-detector clean.
 - Cross-platform: tested on Windows, Linux, macOS paths.

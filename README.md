@@ -1,7 +1,7 @@
 # skillpack
 
 ![Go](https://img.shields.io/badge/Go-1.26+-00ADD8?style=for-the-badge&logo=go&logoColor=white)
-![Tests](https://img.shields.io/badge/tests-188%2B-brightgreen?style=for-the-badge)
+![Tests](https://img.shields.io/badge/tests-216-brightgreen?style=for-the-badge)
 ![License](https://img.shields.io/badge/license-MIT-blue?style=for-the-badge)
 ![Status](https://img.shields.io/badge/status-stable-success?style=for-the-badge)
 ![Binary](https://img.shields.io/badge/binary-%3C5MB-orange?style=for-the-badge)
@@ -412,21 +412,24 @@ internal dependencies.
 
 ## Test Coverage
 
-188+ tests across all layers:
+216 tests across all layers:
 
 | Package | Tests | What it covers |
 |---|---|---|
-| `parser` | 30+ | All four formats, CRLF, BOM, missing fields, bad YAML, requires (list/map), v-prefix versions |
-| `semver` | 20+ | Caret, tilde, comparators, x-ranges, BestMatch, normalize, edge cases |
-| `resolver` | 15+ | Linear chain, diamond, cycle, missing dep, version conflict, deterministic ordering, duplicates |
-| `hasher` | 12+ | Determinism, frontmatter order, tools order, requires order, sensitivity to body/version/name |
-| `lockfile` | 17+ | Roundtrip, sort order, LF only, trailing newline, missing version, future version, atomic write |
-| `bundle` | 13+ | Determinism, multiple formats, header validation, path safety, list mode |
-| `signer` | 14+ | Generate, sign, verify, tampered, wrong key, CRLF in key file, file roundtrip |
-| `verify` | 12+ | Clean, drift hash, drift version, missing, extra, sorted findings, parse error |
-| `manifest` | 11+ | Roundtrip, sort, missing fields, bad YAML, write/read |
-| `workspace` | 9+ | Load happy, missing manifest, missing dep, recursive discover, dedup, ignore .git |
-| `cli` | 25+ | init, add, resolve, install, verify (clean/drift), bundle, sign, keygen, lock, JSON output, error paths |
+| `parser` | 32 | All four formats, CRLF, BOM, missing fields, bad YAML, requires (list/map), v-prefix versions |
+| `cli` | 27 | init, add, resolve, install, verify (clean/drift), bundle, sign, keygen, lock, JSON output, error paths |
+| `semver` | 17 | Caret, tilde, comparators, x-ranges, BestMatch, normalize, edge cases |
+| `hasher` | 17 | Determinism, frontmatter order, tools/requires order, body/version/name sensitivity, collision-resistance across comma/pipe/`=`/newline ambiguity |
+| `lockfile` | 17 | Roundtrip, sort order, LF only, trailing newline, missing/negative/future version, atomic write |
+| `signer` | 16 | Generate, sign, verify, tampered, wrong key, CRLF in key file, file roundtrip, trailing garbage, multi-line body |
+| `bundle` | 16 | Determinism, multiple formats, header validation, path safety, list mode, tainted-archive hardening |
+| `skill` | 16 | Canonical record validation, name rules (`.`/`..`/leading-dot/whitespace), constraint parsing, sorting |
+| `resolver` | 14 | Linear chain, diamond, cycle, self-cycle, missing dep, version conflict, deterministic ordering, duplicates |
+| `manifest` | 14 | Roundtrip, sort, missing fields, bad YAML, write/read, skills-path validation |
+| `verify` | 11 | Clean, drift hash, drift version, missing, extra, sorted findings, parse error |
+| `exitcode` | 8 | Wrap/Classify, nil-safe, layered wrap preservation |
+| `workspace` | 8 | Load happy, missing manifest, missing dep, recursive discover, dedup, ignore .git |
+| `docsmeta` | 3 | Doc-accuracy meta-tests: ROUND_LOG/CHANGELOG/README test-count pins |
 
 Run them yourself:
 

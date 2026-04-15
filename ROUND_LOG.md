@@ -22,21 +22,22 @@ gzipped tarball → ed25519 detached signatures → CI drift verifier.
 | Package | LOC | Tests | Purpose |
 |---|---|---|---|
 | `cmd/skillpack` | 12 | — | entry point |
-| `internal/cli` | ~530 | 25+ | cobra command tree |
-| `internal/workspace` | 170 | 9 | manifest + parser + resolver glue |
-| `internal/manifest` | 90 | 11 | skillpack.yaml read/write |
-| `internal/parser` | ~440 | 30+ | multi-format parser |
-| `internal/skill` | 130 | 9 | canonical Skill record |
-| `internal/semver` | 240 | 20+ | constraint matcher (^/~/x/...) |
-| `internal/resolver` | 170 | 15+ | topological sort + semver checks |
-| `internal/hasher` | 90 | 12 | sha256 content addressing |
+| `internal/cli` | ~530 | 27 | cobra command tree |
+| `internal/workspace` | 170 | 8 | manifest + parser + resolver glue |
+| `internal/manifest` | 90 | 14 | skillpack.yaml read/write |
+| `internal/parser` | ~440 | 32 | multi-format parser |
+| `internal/skill` | 130 | 16 | canonical Skill record |
+| `internal/semver` | 240 | 17 | constraint matcher (^/~/x/...) |
+| `internal/resolver` | 170 | 14 | topological sort + semver checks |
+| `internal/hasher` | 90 | 17 | sha256 content addressing |
 | `internal/lockfile` | 200 | 17 | deterministic JSON lockfile |
-| `internal/bundle` | 210 | 13 | deterministic tar.gz writer |
-| `internal/signer` | 180 | 14 | ed25519 detached signatures |
-| `internal/verify` | 145 | 12 | CI drift detection |
-| `internal/exitcode` | 80 | 7 | typed errors → exit codes |
+| `internal/bundle` | 210 | 16 | deterministic tar.gz writer |
+| `internal/signer` | 180 | 16 | ed25519 detached signatures |
+| `internal/verify` | 145 | 11 | CI drift detection |
+| `internal/exitcode` | 80 | 8 | typed errors → exit codes |
+| `internal/docsmeta` | 65 | 3 | doc accuracy meta-tests (Cycle H) |
 
-Total: ~5,600 lines of Go, **205 tests** (192 initial + 13 from Eval Cycle B fixes).
+Total: ~5,660 lines of Go, **216 tests** (192 initial + 24 added across Eval Cycles B through H).
 
 ## Dependencies (exactly three, plus pflag transitively from cobra)
 
@@ -48,7 +49,7 @@ Total: ~5,600 lines of Go, **205 tests** (192 initial + 13 from Eval Cycle B fix
 
 - `go build ./...` — clean
 - `go vet ./...` — clean
-- `go test ./...` — all 192 tests pass
+- `go test ./...` — all 216 tests pass (race-clean, vet-clean)
 - `go test -race ./...` — race-detector clean
 - `go mod tidy && git diff --exit-code` — clean (no dep drift)
 - Binary size 4.2 MB (target: < 15 MB) — passed
@@ -185,6 +186,72 @@ Live adversarial probes (all return the right exit code):
   `signer: malformed key: unexpected trailing data`
 - Tainted `.skl` with `../evil` entry fed to `bundle --list` → exit 2,
   `bundle: traversal path not allowed`
+
+## Eval Cycle C — fixes applied
+
+Cycle C removed one piece of dead code:
+
+- Deprecated `tar.TypeRegA` branch in `bundle.Inspect` was unreachable because
+  the stdlib reader normalizes TypeRegA to TypeReg before callers see it.
+  Dropped the branch. Also removed `hasher.MustHash` (unused exported helper).
+
+## Eval Cycle E — fixes applied
+
+Cycle E found one silent-overwrite bug:
+
+- **E1** `skillpack keygen` (without `--force`) silently regenerated keys when
+  the files already existed, even though the command intends to protect
+  existing material. Fix: `newKeygenCmd` now `os.Stat`s both `--priv` and
+  `--pub` before generation and returns a Usage error if either already
+  exists. `--force` opts in to overwrite. New regression test
+  `TestKeygenRefusesOverwrite`.
+
+## Eval Cycle G — fixes applied
+
+Cycle G found three canonical-form hash collisions, one keygen same-path
+data-loss bug, and one lockfile schema validation bug. +7 regression tests
+(206 → 213):
+
+- **G1/G2/G3 (HIGH, integrity)** — the hasher's canonical pre-image comma-
+  joined `tools`, pipe-joined `requires`, replaced `\n` in values with a
+  single space, and used `=` as frontmatter key/value separator. Every one
+  of those choices aliases distinct inputs onto the same pre-image. Rewrote
+  `CanonicalBytes` to render every value via `strconv.Quote`, emit one line
+  per tool/requires element (indexed), and length-prefix the body with
+  `body.len=N`. Tests: `TestHashToolsDistinctAcrossCommaAmbiguity`,
+  `TestHashDescriptionDistinctAcrossNewlineSpace`,
+  `TestHashFrontmatterDistinctAcrossEqualSign`,
+  `TestHashFrontmatterDistinctAcrossNewlineInjection`,
+  `TestHashRequiresDistinctAcrossPipeAmbiguity`.
+- **G4 (HIGH, security)** — `keygen --priv X --pub X` silently destroyed
+  the private key by writing priv then immediately overwriting with pub.
+  Fix: compare `filepath.Abs` of both paths and refuse with Usage error
+  before any write. Test: `TestCLIKeygenRejectsSamePath` (covers literal
+  equality and `./k` vs `k` via chdir).
+- **G5 (LOW)** — `lockfile.Unmarshal` accepted negative schema versions
+  (only `== 0` was rejected). Tightened to `<= 0 → error`. Test:
+  `TestUnmarshalNegativeVersion`.
+
+The canonical form change invalidates every pre-existing lockfile hash.
+This is V1 just shipped; `skillpack install` regenerates idempotently.
+
+## Eval Cycle H — fixes applied
+
+Cycle H re-verified all G fixes and found one doc-integrity issue:
+
+- **H1 (doc)** — `ROUND_LOG.md`, `CHANGELOG.md`, and `README.md` all still
+  claimed 205 / 188+ tests and did not record cycles C, E, or G. Fix:
+  synchronized all three files with the actual per-package counts (213
+  total), and added cycle C/E/G/H history here.
+
+Cycle H probes (all verified): canonical-form robustness against key/value
+confusion, list element boundary injection, CR/TAB/newline embedding, empty
+values, BOM-prefixed name, unicode surrogates, 1 MiB-long values,
+`---body---` marker injection; resolver self-loop and indirect cycles;
+`bundle` determinism across two runs (byte-identical cmp); sign/verify
+round-trip with CRLF and trailing-newline public keys; every subcommand
+`--help` flag wired through RunE; keygen overwrite refusal and same-path
+refusal; tamper detection with exit 6.
 
 ## Files created
 
