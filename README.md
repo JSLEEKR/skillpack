@@ -412,7 +412,7 @@ internal dependencies.
 
 ## Test Coverage
 
-216 tests across all layers:
+218 tests across all layers:
 
 | Package | Tests | What it covers |
 |---|---|---|
@@ -426,10 +426,10 @@ internal dependencies.
 | `skill` | 16 | Canonical record validation, name rules (`.`/`..`/leading-dot/whitespace), constraint parsing, sorting |
 | `resolver` | 14 | Linear chain, diamond, cycle, self-cycle, missing dep, version conflict, deterministic ordering, duplicates |
 | `manifest` | 14 | Roundtrip, sort, missing fields, bad YAML, write/read, skills-path validation |
-| `verify` | 11 | Clean, drift hash, drift version, missing, extra, sorted findings, parse error |
+| `verify` | 12 | Clean, drift hash, drift version, missing, extra, sorted findings, parse error, JSON snake_case schema pin (Cycle J) |
 | `exitcode` | 8 | Wrap/Classify, nil-safe, layered wrap preservation |
 | `workspace` | 8 | Load happy, missing manifest, missing dep, recursive discover, dedup, ignore .git |
-| `docsmeta` | 3 | Doc-accuracy meta-tests: ROUND_LOG/CHANGELOG/README test-count pins |
+| `docsmeta` | 4 | Doc-accuracy meta-tests: ROUND_LOG/CHANGELOG/README test-count pins + meta-meta self-consistency (Cycle J) |
 
 Run them yourself:
 

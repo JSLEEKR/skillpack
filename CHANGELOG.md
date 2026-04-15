@@ -64,9 +64,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `lockfile.Unmarshal` now rejects every non-positive `"version"` value.
   Previously only `version == 0` was caught.
 
+### JSON schema consistency (Eval Cycle J)
+
+- `verify --json` now emits snake_case keys (`drifted`, `missing`, `extra`,
+  `findings`, `ok` and `name`/`kind`/`want`/`got`/`message` for each
+  finding). Previously `verify.Result` and `verify.Finding` had no
+  `json:"..."` tags so encoding/json fell back to PascalCase Go field
+  names — inconsistent with `resolve --json`, the lockfile, and the
+  manifest. Pinned by `TestResultJSONSchemaIsSnakeCase` so it can't
+  regress.
+- `internal/docsmeta/docsmeta_test.go` error messages had stale `'213
+  tests'` references inside `t.Errorf` strings even though the assertion
+  bodies checked for `'216 tests'`. Fixed and now pinned by a
+  meta-meta-test (`TestDocsmetaTestSelfConsistent`) that scans the source
+  and rejects any non-comment `NNN tests` mismatch with the current
+  pinned count.
+
 ### Quality
 
-- **216 tests** across unit and integration layers (192 initial + 24
-  across Eval Cycles B through H, including 3 doc-accuracy meta-tests).
+- **218 tests** across unit and integration layers (192 initial + 26
+  across Eval Cycles B through J, including 4 doc-accuracy meta-tests
+  and one snake_case JSON schema regression pin).
 - `go vet` clean, race-detector clean.
 - Cross-platform: tested on Windows, Linux, macOS paths.

@@ -35,9 +35,9 @@ gzipped tarball → ed25519 detached signatures → CI drift verifier.
 | `internal/signer` | 180 | 16 | ed25519 detached signatures |
 | `internal/verify` | 145 | 11 | CI drift detection |
 | `internal/exitcode` | 80 | 8 | typed errors → exit codes |
-| `internal/docsmeta` | 65 | 3 | doc accuracy meta-tests (Cycle H) |
+| `internal/docsmeta` | 110 | 4 | doc accuracy meta-tests (Cycle H, J) |
 
-Total: ~5,660 lines of Go, **216 tests** (192 initial + 24 added across Eval Cycles B through H).
+Total: ~5,720 lines of Go, **218 tests** (192 initial + 26 added across Eval Cycles B through J).
 
 ## Dependencies (exactly three, plus pflag transitively from cobra)
 
@@ -49,7 +49,7 @@ Total: ~5,660 lines of Go, **216 tests** (192 initial + 24 added across Eval Cyc
 
 - `go build ./...` — clean
 - `go vet ./...` — clean
-- `go test ./...` — all 216 tests pass (race-clean, vet-clean)
+- `go test ./...` — all 218 tests pass (race-clean, vet-clean)
 - `go test -race ./...` — race-detector clean
 - `go mod tidy && git diff --exit-code` — clean (no dep drift)
 - Binary size 4.2 MB (target: < 15 MB) — passed
@@ -252,6 +252,33 @@ values, BOM-prefixed name, unicode surrogates, 1 MiB-long values,
 round-trip with CRLF and trailing-newline public keys; every subcommand
 `--help` flag wired through RunE; keygen overwrite refusal and same-path
 refusal; tamper detection with exit 6.
+
+## Eval Cycle J — fixes applied
+
+Cycle J found two bugs:
+
+- **J1 (medium)** — `verify --json` exposed PascalCase Go field names
+  (`Drifted`, `Missing`, `Extra`, `Findings`, `OK`, plus `Finding.Name`
+  / `Kind` / `Want` / `Got` / `Message`) because `verify.Result` and
+  `verify.Finding` had no json struct tags. Every other JSON surface
+  (`resolve --json`, `skillpack.lock`, `skillpack.yaml`) uses snake_case.
+  Fix: added explicit `json:"..."` tags and a regression test
+  (`TestResultJSONSchemaIsSnakeCase`) that marshals a Result and rejects
+  both missing snake_case keys and leftover PascalCase keys.
+- **J2 (cosmetic)** — `internal/docsmeta/docsmeta_test.go` error messages
+  still said `'213 tests'` in two places even though the assertion
+  checked for `216 tests` (noted by Cycle I but not fixed). Ironic for
+  the drift detector. Fix: corrected the error strings and added a
+  meta-meta-test `TestDocsmetaTestSelfConsistent` that scans the docsmeta
+  source and fails if any `NNN tests` reference on a non-comment,
+  non-stale-check line disagrees with the pinned count.
+
+Cycle J probes (all verified): lockfile write → read → write round-trip
+(byte-identical), add-duplicate detection, verify on missing file and on
+hash drift, bundle tar header compliance (`tar -tvf`: mode 0644, uid/gid
+0/0, deterministic 1970-01-02 mtime), semver prerelease ordering per
+semver.org (`01` / `00` leading-zero rejection, `alpha.beta > alpha`),
+CLI `--version` / `version` subcommand / no-args (sensible exit codes).
 
 ## Files created
 

@@ -15,21 +15,26 @@ import (
 
 // Result is the outcome of a verify run. It always has a populated
 // Findings slice (possibly empty), even on success.
+//
+// JSON field names are snake_case so the public --json schema matches the
+// rest of the CLI (resolve, lockfile, manifest). Cycle J fix: previously
+// the struct had no tags, so encoding/json fell back to PascalCase Go
+// field names — inconsistent with every other JSON surface in the binary.
 type Result struct {
-	Drifted  []Finding // skills whose hash or version drifted
-	Missing  []Finding // skills in the lockfile but not on disk
-	Extra    []Finding // skills on disk but not in the lockfile
-	Findings []Finding // union of all of the above (sorted)
-	OK       bool      // true if no findings of any kind
+	Drifted  []Finding `json:"drifted"`  // skills whose hash or version drifted
+	Missing  []Finding `json:"missing"`  // skills in the lockfile but not on disk
+	Extra    []Finding `json:"extra"`    // skills on disk but not in the lockfile
+	Findings []Finding `json:"findings"` // union of all of the above (sorted)
+	OK       bool      `json:"ok"`       // true if no findings of any kind
 }
 
 // Finding is a single mismatch.
 type Finding struct {
-	Name    string
-	Kind    string // "drift" | "missing" | "extra"
-	Want    string // expected value (lockfile)
-	Got     string // actual value (disk)
-	Message string
+	Name    string `json:"name"`
+	Kind    string `json:"kind"` // "drift" | "missing" | "extra"
+	Want    string `json:"want"` // expected value (lockfile)
+	Got     string `json:"got"`  // actual value (disk)
+	Message string `json:"message"`
 }
 
 // Run performs the verification. The skillFiles argument is a slice of

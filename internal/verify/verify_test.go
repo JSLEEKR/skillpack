@@ -1,6 +1,7 @@
 package verify
 
 import (
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"testing"
@@ -178,6 +179,61 @@ func TestRunDuplicateNameOnDisk(t *testing.T) {
 	}
 	if !foundDup {
 		t.Errorf("missing duplicate-name drift finding: %+v", res.Findings)
+	}
+}
+
+// TestResultJSONSchemaIsSnakeCase pins the public --json schema for `verify`
+// to lowercase snake_case keys. Cycle J regression: the struct previously
+// had no json tags and encoding/json fell back to PascalCase Go field names
+// (Drifted/Missing/Extra/Findings/OK), inconsistent with `resolve --json`,
+// the lockfile, and the manifest — all of which use snake_case. CI tools
+// that consumed `verify --json` would have to special-case this one
+// command. The struct tags fix the schema; this test pins it.
+func TestResultJSONSchemaIsSnakeCase(t *testing.T) {
+	r := &Result{
+		Drifted:  []Finding{{Name: "x", Kind: "drift", Want: "w", Got: "g", Message: "m"}},
+		Missing:  nil,
+		Extra:    nil,
+		Findings: []Finding{{Name: "x", Kind: "drift", Want: "w", Got: "g", Message: "m"}},
+		OK:       false,
+	}
+	raw, err := json.Marshal(r)
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
+	// Decode into a generic map to inspect the actual key names.
+	var top map[string]interface{}
+	if err := json.Unmarshal(raw, &top); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	for _, k := range []string{"drifted", "missing", "extra", "findings", "ok"} {
+		if _, has := top[k]; !has {
+			t.Errorf("Result JSON missing snake_case key %q (got: %v)", k, top)
+		}
+	}
+	for _, bad := range []string{"Drifted", "Missing", "Extra", "Findings", "OK"} {
+		if _, has := top[bad]; has {
+			t.Errorf("Result JSON exposed PascalCase key %q (want snake_case)", bad)
+		}
+	}
+	// Verify Finding fields too.
+	findings, ok := top["findings"].([]interface{})
+	if !ok || len(findings) != 1 {
+		t.Fatalf("unexpected findings shape: %v", top["findings"])
+	}
+	f, ok := findings[0].(map[string]interface{})
+	if !ok {
+		t.Fatalf("finding[0] not an object: %v", findings[0])
+	}
+	for _, k := range []string{"name", "kind", "want", "got", "message"} {
+		if _, has := f[k]; !has {
+			t.Errorf("Finding JSON missing snake_case key %q (got: %v)", k, f)
+		}
+	}
+	for _, bad := range []string{"Name", "Kind", "Want", "Got", "Message"} {
+		if _, has := f[bad]; has {
+			t.Errorf("Finding JSON exposed PascalCase key %q (want snake_case)", bad)
+		}
 	}
 }
 
