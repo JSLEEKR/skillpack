@@ -7,41 +7,47 @@ package hasher
 import (
 	"crypto/sha256"
 	"encoding/hex"
+	"strconv"
 	"strings"
 
 	"github.com/JSLEEKR/skillpack/internal/skill"
 )
 
 // CanonicalBytes returns the deterministic representation used as the
-// hash pre-image. The format is a simple line-oriented protocol so that
-// changes remain human-diffable when debugging drift.
+// hash pre-image. The format is a line-oriented protocol where every value
+// is rendered via strconv.Quote so newlines, separators, and control bytes
+// inside values cannot collide across different inputs.
 //
-//	format=skill.md
-//	name=<name>
-//	version=<version>
-//	description=<one-line description, newlines collapsed to spaces>
-//	license=<license>
-//	author=<author>
-//	tools=<sorted comma-separated list>
-//	requires=<sorted "name expr" entries separated by "|">
-//	frontmatter.<key>=<value>   (sorted, each on own line)
+// Format (each line ends with LF):
+//
+//	format=<quoted>
+//	name=<quoted>
+//	version=<quoted>
+//	description=<quoted>
+//	license=<quoted>
+//	author=<quoted>
+//	tools[<i>]=<quoted>             (one line per tool, sorted)
+//	requires[<i>].name=<quoted>     (one line per dep, sorted by name then expr)
+//	requires[<i>].expr=<quoted>
+//	frontmatter[<key>]=<quoted>     (one line per frontmatter key, sorted, with
+//	                                 already-represented scalar keys skipped)
+//	body.len=<n>
 //	---body---
-//	<body text, already LF-normalized, single trailing LF>
+//	<n bytes of body, LF-normalized>
 //
-// Unknown frontmatter keys are folded in under `frontmatter.`; list fields
-// (tools/requires) and scalar fields appear under their canonical keys.
+// Why per-element lines instead of comma/pipe-joined lists: a joined form
+// like `tools=a,b,c` cannot distinguish `["a,b","c"]` from `["a","b,c"]`.
+// Length-prefixing the body and quoting every other value removes every
+// ambiguity, so two distinct skills cannot share a canonical preimage.
 func CanonicalBytes(s *skill.Skill) []byte {
 	if s == nil {
 		return nil
 	}
 	var b strings.Builder
 	writeKV := func(k, v string) {
-		// Escape NL in values so one field stays on one line.
-		v = strings.ReplaceAll(v, "\r\n", " ")
-		v = strings.ReplaceAll(v, "\n", " ")
 		b.WriteString(k)
 		b.WriteByte('=')
-		b.WriteString(v)
+		b.WriteString(strconv.Quote(v))
 		b.WriteByte('\n')
 	}
 	writeKV("format", string(s.Format))
@@ -50,13 +56,14 @@ func CanonicalBytes(s *skill.Skill) []byte {
 	writeKV("description", s.Description)
 	writeKV("license", s.License)
 	writeKV("author", s.Author)
-	writeKV("tools", strings.Join(s.SortedTools(), ","))
-	// Requires: "name expr|name expr|..."
-	reqStrs := make([]string, 0, len(s.Requires))
-	for _, c := range s.SortedRequires() {
-		reqStrs = append(reqStrs, c.String())
+	for i, t := range s.SortedTools() {
+		writeKV("tools["+strconv.Itoa(i)+"]", t)
 	}
-	writeKV("requires", strings.Join(reqStrs, "|"))
+	for i, c := range s.SortedRequires() {
+		idx := strconv.Itoa(i)
+		writeKV("requires["+idx+"].name", c.Name)
+		writeKV("requires["+idx+"].expr", c.Expr)
+	}
 	// Frontmatter: skip keys already represented above to avoid double counting.
 	skipFM := map[string]struct{}{
 		"name": {}, "version": {}, "description": {}, "license": {}, "author": {},
@@ -65,10 +72,21 @@ func CanonicalBytes(s *skill.Skill) []byte {
 		if _, skip := skipFM[k]; skip {
 			continue
 		}
-		writeKV("frontmatter."+k, s.Frontmatter[k])
+		// Quote the key too — frontmatter keys can in principle contain any
+		// rune (YAML map key), and we must distinguish e.g. "k=v" used as a
+		// key vs as a value.
+		b.WriteString("frontmatter[")
+		b.WriteString(strconv.Quote(k))
+		b.WriteString("]=")
+		b.WriteString(strconv.Quote(s.Frontmatter[k]))
+		b.WriteByte('\n')
 	}
+	body := s.Body
+	b.WriteString("body.len=")
+	b.WriteString(strconv.Itoa(len(body)))
+	b.WriteByte('\n')
 	b.WriteString("---body---\n")
-	b.WriteString(s.Body)
+	b.WriteString(body)
 	return []byte(b.String())
 }
 

@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"path/filepath"
 
 	"github.com/spf13/cobra"
 
@@ -65,6 +66,22 @@ func newKeygenCmd(state *rootState) *cobra.Command {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if privPath == "" || pubPath == "" {
 				return exitcode.Wrap(exitcode.Usage, fmt.Errorf("--priv and --pub are required"))
+			}
+			// G1 fix: the earlier version happily let `--priv X --pub X`
+			// through; `keygen` would then write the private key first and
+			// immediately overwrite it with the public key, silently turning
+			// the private key into a public one. Compare absolute paths so
+			// "./key" and "key" are also caught.
+			absPriv, err := filepath.Abs(privPath)
+			if err != nil {
+				return exitcode.Wrap(exitcode.IO, fmt.Errorf("abs %q: %w", privPath, err))
+			}
+			absPub, err := filepath.Abs(pubPath)
+			if err != nil {
+				return exitcode.Wrap(exitcode.IO, fmt.Errorf("abs %q: %w", pubPath, err))
+			}
+			if absPriv == absPub {
+				return exitcode.Wrap(exitcode.Usage, fmt.Errorf("--priv and --pub must differ: %q", privPath))
 			}
 			if !force {
 				for _, p := range []string{privPath, pubPath} {

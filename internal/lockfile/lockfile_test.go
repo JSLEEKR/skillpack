@@ -113,6 +113,19 @@ func TestUnmarshalFutureVersion(t *testing.T) {
 	}
 }
 
+// G regression: a negative version used to slip through because only
+// `version == 0` triggered the missing-version error, and every negative
+// int passes the `> CurrentVersion` check. Reject all non-positive values
+// since schema versions are always >= 1.
+func TestUnmarshalNegativeVersion(t *testing.T) {
+	for _, v := range []string{"-1", "-2", "-2147483648"} {
+		_, err := Unmarshal([]byte(`{"version":` + v + `,"skills":[]}`))
+		if err == nil {
+			t.Errorf("expected error on negative version %s", v)
+		}
+	}
+}
+
 func TestUnmarshalBadJSON(t *testing.T) {
 	_, err := Unmarshal([]byte(`{bad json`))
 	if err == nil {

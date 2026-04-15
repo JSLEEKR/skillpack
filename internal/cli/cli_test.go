@@ -174,6 +174,40 @@ func TestCLIKeygenSignVerify(t *testing.T) {
 	}
 }
 
+// TestCLIKeygenRejectsSamePath is the G1 regression: earlier the CLI let
+// `--priv X --pub X` through and silently destroyed the private key by
+// overwriting it with the public key. Now we refuse with a Usage error
+// before any file is written.
+func TestCLIKeygenRejectsSamePath(t *testing.T) {
+	dir := t.TempDir()
+	same := filepath.Join(dir, "k")
+	_, stderr, code := runCLI(t, "keygen", "--priv", same, "--pub", same)
+	if code != exitcode.Usage {
+		t.Errorf("keygen same path: exit = %d, want Usage; stderr=%q", code, stderr)
+	}
+	// Nothing should have been written to disk.
+	if _, err := os.Stat(same); err == nil {
+		t.Error("keygen same path: file was written anyway")
+	}
+	// And the message should mention the conflict so users can debug.
+	if !strings.Contains(stderr, "must differ") {
+		t.Errorf("expected 'must differ' in stderr, got %q", stderr)
+	}
+
+	// The check must also fire for path equivalence (./k vs k) — compare
+	// absolute paths, not raw strings.
+	same2 := "./" + filepath.Base(same)
+	cwd, _ := os.Getwd()
+	t.Cleanup(func() { _ = os.Chdir(cwd) })
+	if err := os.Chdir(dir); err != nil {
+		t.Fatal(err)
+	}
+	_, _, code = runCLI(t, "keygen", "--priv", same2, "--pub", filepath.Base(same))
+	if code != exitcode.Usage {
+		t.Errorf("keygen equivalent path: exit = %d, want Usage", code)
+	}
+}
+
 func TestCLIKeygenRefusesOverwrite(t *testing.T) {
 	dir := t.TempDir()
 	priv := filepath.Join(dir, "k.priv")

@@ -123,8 +123,11 @@ func Unmarshal(data []byte) (*Lockfile, error) {
 	if err := json.Unmarshal(data, &lf); err != nil {
 		return nil, exitcode.Wrap(exitcode.Parse, fmt.Errorf("lockfile parse: %w", err))
 	}
-	if lf.Version == 0 {
-		return nil, exitcode.Wrap(exitcode.Parse, fmt.Errorf("lockfile parse: missing version"))
+	if lf.Version <= 0 {
+		// G fix: previously only `== 0` was rejected, so a hand-edited
+		// `"version": -1` slipped through. Reject every non-positive value —
+		// schema versions are always >= 1.
+		return nil, exitcode.Wrap(exitcode.Parse, fmt.Errorf("lockfile parse: invalid version %d", lf.Version))
 	}
 	if lf.Version > CurrentVersion {
 		return nil, exitcode.Wrap(exitcode.Parse, fmt.Errorf("lockfile parse: unsupported version %d (max %d)", lf.Version, CurrentVersion))
