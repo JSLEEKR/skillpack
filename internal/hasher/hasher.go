@@ -7,7 +7,6 @@ package hasher
 import (
 	"crypto/sha256"
 	"encoding/hex"
-	"fmt"
 	"strings"
 
 	"github.com/JSLEEKR/skillpack/internal/skill"
@@ -94,11 +93,3 @@ func Equal(a, b string) bool {
 	return strings.EqualFold(strings.TrimSpace(a), strings.TrimSpace(b))
 }
 
-// MustHash panics if s is nil. Used in tests for brevity; production code
-// should prefer Hash and accept the empty string for nil.
-func MustHash(s *skill.Skill) string {
-	if s == nil {
-		panic(fmt.Sprintf("hasher.MustHash: nil skill"))
-	}
-	return Hash(s)
-}

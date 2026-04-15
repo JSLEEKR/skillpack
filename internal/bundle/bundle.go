@@ -219,7 +219,7 @@ func Inspect(data []byte) ([]string, error) {
 		if count > inspectMaxEntries {
 			return nil, exitcode.Wrap(exitcode.Parse, fmt.Errorf("bundle inspect: too many entries (>%d)", inspectMaxEntries))
 		}
-		if hdr.Typeflag != tar.TypeReg && hdr.Typeflag != tar.TypeRegA {
+		if hdr.Typeflag != tar.TypeReg {
 			return nil, exitcode.Wrap(exitcode.Parse, fmt.Errorf("bundle inspect: unsupported entry type %q for %q", hdr.Typeflag, hdr.Name))
 		}
 		if hdr.Size < 0 || hdr.Size > inspectMaxEntrySize {
