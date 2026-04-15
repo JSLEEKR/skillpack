@@ -1,0 +1,26 @@
+# Binaries
+skillpack
+skillpack.exe
+*.exe
+dist/
+
+# Test artifacts
+*.skl
+*.skl.sig
+*.key
+coverage.out
+coverage.html
+
+# Editor
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Local testing
+/tmp/
+testdata-local/
