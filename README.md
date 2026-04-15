@@ -1,7 +1,7 @@
 # skillpack
 
 ![Go](https://img.shields.io/badge/Go-1.26+-00ADD8?style=for-the-badge&logo=go&logoColor=white)
-![Tests](https://img.shields.io/badge/tests-216-brightgreen?style=for-the-badge)
+![Tests](https://img.shields.io/badge/tests-221-brightgreen?style=for-the-badge)
 ![License](https://img.shields.io/badge/license-MIT-blue?style=for-the-badge)
 ![Status](https://img.shields.io/badge/status-stable-success?style=for-the-badge)
 ![Binary](https://img.shields.io/badge/binary-%3C5MB-orange?style=for-the-badge)
@@ -412,7 +412,7 @@ internal dependencies.
 
 ## Test Coverage
 
-220 tests across all layers:
+221 tests across all layers:
 
 | Package | Tests | What it covers |
 |---|---|---|
@@ -429,7 +429,7 @@ internal dependencies.
 | `verify` | 12 | Clean, drift hash, drift version, missing, extra, sorted findings, parse error, JSON snake_case schema pin (Cycle J) |
 | `exitcode` | 8 | Wrap/Classify, nil-safe, layered wrap preservation |
 | `workspace` | 8 | Load happy, missing manifest, missing dep, recursive discover, dedup, ignore .git |
-| `docsmeta` | 4 | Doc-accuracy meta-tests: ROUND_LOG/CHANGELOG/README test-count pins + meta-meta self-consistency (Cycle J) |
+| `docsmeta` | 5 | Doc-accuracy meta-tests: ROUND_LOG/CHANGELOG/README test-count pins + badge pin + per-package table sum + meta-meta self-consistency (Cycle J, L) |
 
 Run them yourself:
 

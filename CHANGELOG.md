@@ -94,10 +94,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   three cosmetic drifts (trailing blank line and two struct-tag column
   alignments) that `gofmt -l` flagged but no prior CI step ran.
 
+### Doc integrity (Eval Cycle L)
+
+- `README.md` shields.io tests badge was still `tests-216` even though
+  the real count had moved to 220 in Cycle K; `ROUND_LOG.md` per-package
+  table still said `lockfile | 17` and `verify | 11` (actual 19/12
+  after Cycles K and J). The earlier `TestREADMEClaimsMatchReality`
+  only positively pinned the prose sentence and negatively blocklisted
+  `tests-188`, so intermediate stale badges slipped through. Fix:
+  corrected every stale count and hardened `docsmeta` with two new
+  tests — `TestREADMEClaimsMatchReality` now positively pins the badge
+  number, and `TestROUND_LOGPerPackageTableMatchesTotal` sums every
+  `` | `internal/X` | LOC | N | `` row and rejects any per-package
+  count that doesn't add up to the project total.
+
 ### Quality
 
-- **220 tests** across unit and integration layers (192 initial + 28
-  across Eval Cycles B through K, including 4 doc-accuracy meta-tests,
+- **221 tests** across unit and integration layers (192 initial + 29
+  across Eval Cycles B through L, including 5 doc-accuracy meta-tests,
   one snake_case JSON schema regression pin, and two lockfile-duplicate
   regression pins).
 - `go vet` clean, race-detector clean, `gofmt -l` clean.

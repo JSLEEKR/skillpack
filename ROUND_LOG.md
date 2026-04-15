@@ -30,14 +30,14 @@ gzipped tarball → ed25519 detached signatures → CI drift verifier.
 | `internal/semver` | 240 | 17 | constraint matcher (^/~/x/...) |
 | `internal/resolver` | 170 | 14 | topological sort + semver checks |
 | `internal/hasher` | 90 | 17 | sha256 content addressing |
-| `internal/lockfile` | 200 | 17 | deterministic JSON lockfile |
+| `internal/lockfile` | 200 | 19 | deterministic JSON lockfile |
 | `internal/bundle` | 210 | 16 | deterministic tar.gz writer |
 | `internal/signer` | 180 | 16 | ed25519 detached signatures |
-| `internal/verify` | 145 | 11 | CI drift detection |
+| `internal/verify` | 145 | 12 | CI drift detection |
 | `internal/exitcode` | 80 | 8 | typed errors → exit codes |
-| `internal/docsmeta` | 110 | 4 | doc accuracy meta-tests (Cycle H, J) |
+| `internal/docsmeta` | 110 | 5 | doc accuracy meta-tests (Cycle H, J, L) |
 
-Total: ~5,720 lines of Go, **220 tests** (192 initial + 28 added across Eval Cycles B through K).
+Total: ~5,720 lines of Go, **221 tests** (192 initial + 29 added across Eval Cycles B through L).
 
 ## Dependencies (exactly three, plus pflag transitively from cobra)
 
@@ -49,7 +49,7 @@ Total: ~5,720 lines of Go, **220 tests** (192 initial + 28 added across Eval Cyc
 
 - `go build ./...` — clean
 - `go vet ./...` — clean
-- `go test ./...` — all 220 tests pass (race-clean, vet-clean)
+- `go test ./...` — all 221 tests pass (race-clean, vet-clean)
 - `go test -race ./...` — race-detector clean
 - `go mod tidy && git diff --exit-code` — clean (no dep drift)
 - Binary size 4.2 MB (target: < 15 MB) — passed
@@ -308,6 +308,41 @@ sign (bundle remains readable, signature is a detached `.sig`), sign
 with key-A verify with key-B (correctly exits 6 with "signature does
 not verify"), docsmeta self-drift probe in a sandbox (flipping `218 tests`
 → `219 tests` in ROUND_LOG fires `TestROUND_LOGClaimsMatchReality`).
+
+## Eval Cycle L — fixes applied
+
+Cycle L found three doc-integrity drifts that the prior doc-pin tests
+did not catch:
+
+- **L1 (doc)** — `README.md` shields.io badge still said `tests-216`
+  even though the actual test count moved to 220 in Cycle K. The Cycle H
+  `TestREADMEClaimsMatchReality` pin only positively asserted the
+  prose sentence (`"220 tests across all layers"`) and negatively
+  blocklisted the ancient `tests-188` badge, so `tests-216` slipped
+  through. Fix: updated the badge to the current count and hardened
+  `TestREADMEClaimsMatchReality` with a positive `tests-220-brightgreen`
+  pin (now `tests-221` after this cycle's new test).
+- **L2 (doc)** — `ROUND_LOG.md` per-package test-count table was stale:
+  `internal/lockfile` row said 17 (actual 19 after Cycle K) and
+  `internal/verify` row said 11 (actual 12 after Cycle J). The headline
+  `220 tests` was correct — meta-tests only pinned the headline, not
+  the per-package rows. Fix: corrected the two rows and added
+  `TestROUND_LOGPerPackageTableMatchesTotal` which scrapes every
+  `` | `internal/X` | LOC | N | `` row and asserts the N column sums
+  to the declared total.
+- **L3 (doc)** — `docsmeta` row of ROUND_LOG table and README table both
+  advertised 4 tests, needed to move to 5 for the new drift-detector
+  above. Synchronized both tables and cycle-history notes.
+
+Cycle L probes (all verified): reproducible `go build -trimpath -ldflags
+"-s -w -buildid="` produces byte-identical sha256 across two runs,
+empty-workspace flow (resolve/install/verify succeed with 0 skills,
+bundle intentionally rejects — design choice pinned by
+`TestBundleEmptyFails`), concurrent `install`+`verify` race (clean,
+race-detector-clean), full E2E init → add → resolve → install → verify
+→ bundle → keygen → sign → sign --verify → tamper → exit 6, no phantom
+env vars or cache directories (no `os.Getenv`/`UserCacheDir` anywhere
+in the tree), `resolve --json` stdout-only with nothing on stderr.
 
 ## Files created
 

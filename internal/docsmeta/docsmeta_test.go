@@ -6,8 +6,8 @@
 // a test without updating the docs, or removes a cycle record, this package
 // fails fast.
 //
-// The pinned count is 220 (the actual count after Cycle K adds two
-// lockfile-duplicate regression tests on top of Cycle J's 218).
+// The pinned count is 221 (the actual count after Cycle L adds one
+// per-package-table-sum regression test on top of Cycle K's 220).
 // Whenever a test is added or removed, update BOTH the docs AND the
 // constants below in lockstep — that is the contract the meta-tests
 // enforce. TestDocsmetaTestSelfConsistent adds a second layer: even the
@@ -19,6 +19,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"runtime"
+	"strconv"
 	"strings"
 	"testing"
 )
@@ -45,21 +46,21 @@ func readFile(t *testing.T, path string) string {
 }
 
 // TestROUND_LOGClaimsMatchReality pins the ROUND_LOG test count statement
-// to the actual test count of 220. Update this number (and the docs) in
+// to the actual test count of 221. Update this number (and the docs) in
 // lockstep when tests are added.
 func TestROUND_LOGClaimsMatchReality(t *testing.T) {
 	root := repoRoot(t)
 	body := readFile(t, filepath.Join(root, "ROUND_LOG.md"))
 	// Must mention the current test count.
-	if !strings.Contains(body, "220 tests") {
-		t.Errorf("ROUND_LOG.md does not mention '220 tests' — doc drift")
+	if !strings.Contains(body, "221 tests") {
+		t.Errorf("ROUND_LOG.md does not mention '221 tests' — doc drift")
 	}
 	// Must NOT still carry the stale 205 count.
 	if strings.Contains(body, "205 tests") {
 		t.Errorf("ROUND_LOG.md still contains stale '205 tests' claim")
 	}
 	// Must record every cycle that shipped a fix, not just A/B.
-	for _, cycle := range []string{"Cycle C", "Cycle E", "Cycle G", "Cycle H", "Cycle J", "Cycle K"} {
+	for _, cycle := range []string{"Cycle C", "Cycle E", "Cycle G", "Cycle H", "Cycle J", "Cycle K", "Cycle L"} {
 		if !strings.Contains(body, cycle) {
 			t.Errorf("ROUND_LOG.md missing record of %s", cycle)
 		}
@@ -70,8 +71,8 @@ func TestROUND_LOGClaimsMatchReality(t *testing.T) {
 func TestCHANGELOGClaimsMatchReality(t *testing.T) {
 	root := repoRoot(t)
 	body := readFile(t, filepath.Join(root, "CHANGELOG.md"))
-	if !strings.Contains(body, "220 tests") {
-		t.Errorf("CHANGELOG.md does not mention '220 tests' — doc drift")
+	if !strings.Contains(body, "221 tests") {
+		t.Errorf("CHANGELOG.md does not mention '221 tests' — doc drift")
 	}
 	if strings.Contains(body, "**205 tests**") {
 		t.Errorf("CHANGELOG.md still contains stale '205 tests' claim")
@@ -84,12 +85,54 @@ func TestCHANGELOGClaimsMatchReality(t *testing.T) {
 func TestREADMEClaimsMatchReality(t *testing.T) {
 	root := repoRoot(t)
 	body := readFile(t, filepath.Join(root, "README.md"))
-	if !strings.Contains(body, "220 tests across all layers") {
-		t.Errorf("README.md does not mention '220 tests across all layers' — doc drift")
+	if !strings.Contains(body, "221 tests across all layers") {
+		t.Errorf("README.md does not mention '221 tests across all layers' — doc drift")
 	}
 	// Badge URL should not still say 188.
 	if strings.Contains(body, "tests-188") {
 		t.Errorf("README.md badge still says tests-188")
+	}
+	// L1 fix: the shields.io tests badge must pin to the CURRENT count,
+	// not a stale number. Cycle L found the badge still at 216 three
+	// cycles after the real count moved to 220; earlier meta-tests
+	// only blocklisted `tests-188` and whitelisted the headline sentence.
+	// Pin the badge positively so every future test-count bump must update
+	// it (or this test fails fast).
+	if !strings.Contains(body, "tests-221-brightgreen") {
+		t.Errorf("README.md tests badge is not 'tests-221-brightgreen' — badge drifted from actual count")
+	}
+}
+
+// TestROUND_LOGPerPackageTableMatchesTotal pins the per-package test-count
+// table in ROUND_LOG.md: the column values must sum to the project total
+// declared in the headline. Cycle L found the table still carried
+// `lockfile | 17` and `verify | 11` three cycles after Cycles J/K added
+// one and two tests respectively. The headline `221 tests` was correct,
+// but the table beneath it was stale — because the earlier meta-tests
+// only pinned the headline string, not the table rows. This test scrapes
+// every "| internal/<pkg> | LOC | N |" row and asserts the N values
+// sum to 221.
+func TestROUND_LOGPerPackageTableMatchesTotal(t *testing.T) {
+	root := repoRoot(t)
+	body := readFile(t, filepath.Join(root, "ROUND_LOG.md"))
+	const wantTotal = 221
+	// Match: `| `internal/<name>` | <loc> | <count> |`
+	// loc may have a leading ~; count is a plain int.
+	row := regexp.MustCompile(`\|\s*` + "`internal/[^`]+`" + `\s*\|\s*~?\d+\s*\|\s*(\d+)\s*\|`)
+	matches := row.FindAllStringSubmatch(body, -1)
+	if len(matches) == 0 {
+		t.Fatal("ROUND_LOG.md has no internal/* rows — table format changed?")
+	}
+	sum := 0
+	for _, m := range matches {
+		n, err := strconv.Atoi(m[1])
+		if err != nil {
+			t.Fatalf("parse count %q: %v", m[1], err)
+		}
+		sum += n
+	}
+	if sum != wantTotal {
+		t.Errorf("ROUND_LOG.md per-package table sums to %d, want %d (headline says %d tests — per-row numbers are stale)", sum, wantTotal, wantTotal)
 	}
 }
 
@@ -103,7 +146,7 @@ func TestDocsmetaTestSelfConsistent(t *testing.T) {
 	root := repoRoot(t)
 	src := readFile(t, filepath.Join(root, "internal", "docsmeta", "docsmeta_test.go"))
 	// The asserted constant; if this ever moves, update the source too.
-	const currentCount = "220"
+	const currentCount = "221"
 	// Any line must only reference `currentCount tests`, `currentCount tests across all layers`,
 	// or the explicitly-rejected historicals below.
 	rejectedHistoricals := map[string]bool{
