@@ -9,6 +9,7 @@ import (
 
 	"github.com/JSLEEKR/skillpack/internal/exitcode"
 	"github.com/JSLEEKR/skillpack/internal/lockfile"
+	"github.com/JSLEEKR/skillpack/internal/manifest"
 	"github.com/JSLEEKR/skillpack/internal/verify"
 	"github.com/JSLEEKR/skillpack/internal/workspace"
 )
@@ -26,7 +27,8 @@ Exit codes:
   1  hash or version drift detected
   2  parse error in a skill file
   3  I/O error
-  4  internal error`,
+  4  internal error
+  6  security (signature verification failed — sign subcommand only)`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			abs, err := filepath.Abs(state.root)
 			if err != nil {
@@ -40,15 +42,27 @@ Exit codes:
 			if err != nil {
 				return err
 			}
-			// Discover skill files (without running the resolver — drift shouldn't
-			// require a valid dep graph).
-			loaded, err := workspace.Load(state.root)
+			// Discover skill files WITHOUT running the resolver. A missing or
+			// deleted skill file is the textbook "drift" case: verify.Run will
+			// produce `missing` findings that map to exit code 1 via
+			// Result.ExitCode(). Running the full resolver here would wrap
+			// missing-dep errors as Parse errors (exit 2), conflating drift
+			// with malformed config and breaking CI branching.
+			manPath := filepath.Join(abs, "skillpack.yaml")
+			w, err := manifest.ReadFile(manPath)
 			if err != nil {
-				// If resolver fails (e.g. missing dep), treat that as drift too.
-				// Parse errors propagate directly.
+				// Fall back to skillpack.yml.
+				alt := filepath.Join(abs, "skillpack.yml")
+				w, err = manifest.ReadFile(alt)
+				if err != nil {
+					return err
+				}
+			}
+			files, err := workspace.Discover(abs, w.Skills)
+			if err != nil {
 				return err
 			}
-			res, err := verify.Run(lf, loaded.Files)
+			res, err := verify.Run(lf, files)
 			if err != nil {
 				return err
 			}

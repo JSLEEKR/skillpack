@@ -7,6 +7,7 @@
 package manifest
 
 import (
+	"bytes"
 	"fmt"
 	"os"
 	"sort"
@@ -36,6 +37,8 @@ func Default(name string) *Workspace {
 }
 
 // Marshal renders the workspace as canonical YAML with sorted skill paths.
+// Uses a 2-space indent to match the README example (yaml.v3's default is 4,
+// which would create a latent drift between documentation and reality).
 func Marshal(w *Workspace) ([]byte, error) {
 	if w == nil {
 		return nil, fmt.Errorf("manifest: nil workspace")
@@ -43,11 +46,17 @@ func Marshal(w *Workspace) ([]byte, error) {
 	cp := *w
 	cp.Skills = append([]string(nil), w.Skills...)
 	sort.Strings(cp.Skills)
-	data, err := yaml.Marshal(&cp)
-	if err != nil {
+	var buf bytes.Buffer
+	enc := yaml.NewEncoder(&buf)
+	enc.SetIndent(2)
+	if err := enc.Encode(&cp); err != nil {
+		_ = enc.Close()
 		return nil, exitcode.Wrap(exitcode.Internal, fmt.Errorf("manifest marshal: %w", err))
 	}
-	return data, nil
+	if err := enc.Close(); err != nil {
+		return nil, exitcode.Wrap(exitcode.Internal, fmt.Errorf("manifest marshal close: %w", err))
+	}
+	return buf.Bytes(), nil
 }
 
 // Unmarshal parses skillpack.yaml from raw bytes.

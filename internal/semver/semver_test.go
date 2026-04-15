@@ -135,6 +135,13 @@ func TestMatchCaret(t *testing.T) {
 		{"0.2.3", "^0.2.3", true},
 		{"0.2.4", "^0.2.3", true},
 		{"0.3.0", "^0.2.3", false},
+		// 0.0.x special case (M1 regression): matches npm/cargo/semver.org —
+		// ^0.0.x is a PATCH-only bound because any 0.0 bump is breaking.
+		{"0.0.1", "^0.0.1", true},
+		{"0.0.2", "^0.0.1", false}, // before the fix, this was true (too loose)
+		{"0.1.0", "^0.0.1", false},
+		{"0.0.3", "^0.0.3", true},
+		{"0.0.4", "^0.0.3", false},
 	}
 	for _, tc := range tests {
 		got, err := Match(tc.v, tc.c)

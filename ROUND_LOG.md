@@ -6,7 +6,7 @@
 - **Date**: 2026-04-14
 - **Build status**: new build (not imported)
 - **Pitch score**: 104/110 (Trend Scout winner, data-driven v6)
-- **Go version**: 1.21+
+- **Go version**: 1.26+
 - **Binary size**: 4.2 MB (`go build -ldflags="-s -w"`, windows/amd64)
 
 ## What was built
@@ -36,7 +36,7 @@ gzipped tarball → ed25519 detached signatures → CI drift verifier.
 | `internal/verify` | 145 | 12 | CI drift detection |
 | `internal/exitcode` | 80 | 7 | typed errors → exit codes |
 
-Total: ~5,350 lines of Go, **188 tests**.
+Total: ~5,400 lines of Go, **192 tests**.
 
 ## Dependencies (exactly three, plus pflag transitively from cobra)
 
@@ -48,8 +48,9 @@ Total: ~5,350 lines of Go, **188 tests**.
 
 - `go build ./...` — clean
 - `go vet ./...` — clean
-- `go test ./...` — all 188 tests pass
+- `go test ./...` — all 192 tests pass
 - `go test -race ./...` — race-detector clean
+- `go mod tidy && git diff --exit-code` — clean (no dep drift)
 - Binary size 4.2 MB (target: < 15 MB) — passed
 - README 502 lines (target: 300+) — passed
 - End-to-end smoke test: init → add → install → verify → bundle → keygen
@@ -100,20 +101,42 @@ Total: ~5,350 lines of Go, **188 tests**.
   shapes. The YAML unmarshaler can give you `map[interface{}]interface{}`
   or `map[string]interface{}` depending on version; both are handled, but
   if a fifth shape shows up in practice, it'll need a new case.
-- The verify command will fail with a *resolver* error (missing dep) if
-  the workspace manifest points at skills that have broken deps. This is
-  deliberate — we don't want to say "drift OK" when the graph is broken.
-  But it means `verify` has two failure modes that both return non-zero
-  via `exitcode.Parse`. The exit-code contract is correctly distinct
-  (drift=1, parse=2) but worth double-checking in a hostile read.
+- The verify command now intentionally does NOT invoke the resolver.
+  A deleted or broken-dep skill is treated as "drift" (exit 1) so CI
+  branching stays consistent. If you need graph validation, run
+  `skillpack resolve` (which does invoke the resolver).
 - `semver.incInt` rolls its own int parser to avoid a strconv import. It
   handles 0-padded inputs like `v01.02.03` (x/mod/semver rejects those
   upstream before we get here), but worth a look.
-- The manifest writer uses yaml.v3 default encoding. Two-space indent is
-  not explicitly configured; the default happens to match what we want,
-  but this is a latent dependency on yaml.v3's default behavior.
+- The manifest writer now explicitly calls `yaml.Encoder.SetIndent(2)`,
+  removing the latent dependency on yaml.v3's default indent.
 
 No deliberate shortcuts, no skipped tests, no `//nolint` comments.
+
+## Eval Cycle A — fixes applied
+
+Cycle A found 7 issues; all fixed in this round before handing to Cycle B:
+
+- **H1** `go mod tidy` drift — direct/indirect dep classification corrected,
+  README badge aligned to "Go 1.26+" to match `go.mod`. `go mod tidy` is now
+  a no-op.
+- **H2** `verify` exited 2 (Parse) instead of 1 (Drift) when a skill file
+  was deleted. `cli/verify.go` now reads the manifest + discovers files
+  directly and skips the resolver; `verify.Run` produces a `missing`
+  finding that maps to exit 1. New CLI test `TestCLIVerifyDeletedFile`
+  asserts the deleted-file exit code.
+- **M1** `^0.0.x` caret now pins to an exact patch (npm/cargo semantics).
+  New test cases for `^0.0.1` and `^0.0.3`.
+- **M2** `bundle --list <path.skl>` now reads the bundle from disk via
+  `bundle.Inspect`. New test `TestCLIBundleListFromDisk`.
+- **M3** Tampered-signature verification now returns a new dedicated exit
+  code `Security = 6` instead of overloading `Drift = 1`. README exit-code
+  table and CI example updated. New test `TestCLISignTamperedIsSecurity`.
+- **L1** `.gitignore` now hides `.eval-notes-*.md` and `.harness/`.
+- **L2** `manifest.Marshal` now explicitly uses `yaml.Encoder.SetIndent(2)`
+  to match the README example (no longer a latent yaml.v3 default).
+- **L3** Install/bundle CLI output pluralisation fixed via `pluralSkill(n)`:
+  `(1 skill)` vs `(2 skills)`. New test `TestCLIInstallPluralisation`.
 
 ## Files created
 

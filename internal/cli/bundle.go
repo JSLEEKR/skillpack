@@ -2,6 +2,7 @@ package cli
 
 import (
 	"fmt"
+	"os"
 	"path/filepath"
 
 	"github.com/spf13/cobra"
@@ -23,8 +24,33 @@ func newBundleCmd(state *rootState) *cobra.Command {
 writes a deterministic gzip-compressed tarball.
 
 Two runs over the same input produce byte-identical archives, so the tarball
-hash is itself a stable content address.`,
+hash is itself a stable content address.
+
+Pass an optional positional path to --list (e.g. 'skillpack bundle --list
+some.skl') to inspect an existing bundle on disk instead of re-resolving
+the workspace.`,
+		Args: cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
+			// --list <path.skl>: inspect an existing bundle without resolving
+			// the workspace. This is the "what's in this file I was given"
+			// workflow — useful for downstream consumers.
+			if listMode && len(args) == 1 {
+				data, err := os.ReadFile(args[0])
+				if err != nil {
+					return exitcode.Wrap(exitcode.IO, fmt.Errorf("bundle: read %s: %w", args[0], err))
+				}
+				lines, err := bundle.Inspect(data)
+				if err != nil {
+					return err
+				}
+				for _, l := range lines {
+					fmt.Fprintln(state.stdout, l)
+				}
+				return nil
+			}
+			if !listMode && len(args) == 1 {
+				return exitcode.Wrap(exitcode.Usage, fmt.Errorf("bundle: positional path only valid with --list"))
+			}
 			loaded, err := workspace.Load(state.root)
 			if err != nil {
 				return err
@@ -58,7 +84,7 @@ hash is itself a stable content address.`,
 			if err := bundle.WriteFile(out, data); err != nil {
 				return err
 			}
-			fmt.Fprintf(state.stdout, "skillpack: wrote %s (%d bytes, %d skills)\n", out, len(data), len(loaded.Skills))
+			fmt.Fprintf(state.stdout, "skillpack: wrote %s (%d bytes, %d %s)\n", out, len(data), len(loaded.Skills), pluralSkill(len(loaded.Skills)))
 			fmt.Fprintf(state.stdout, "  hash: %s\n", hasher.HashBytes(data))
 			return nil
 		},

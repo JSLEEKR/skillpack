@@ -147,21 +147,39 @@ func matchCaret(nv, raw string) (bool, error) {
 	if lower == "" {
 		return false, fmt.Errorf("semver.Match: invalid caret %q", raw)
 	}
-	// Upper bound: next major (or next minor if major is 0).
+	// Upper bound: next major, or next minor if major is 0, or next patch
+	// if both major and minor are 0 (matches npm/cargo/semver.org semantics
+	// where every 0.0.x bump is considered breaking).
 	majorStr := strings.TrimPrefix(xsemver.Major(lower), "v")
 	var upper string
 	if majorStr == "0" {
-		// ^0.y.z -> >=0.y.z <0.(y+1).0 for SemVer2 compatibility
-		mm := strings.TrimPrefix(xsemver.MajorMinor(lower), "v")
-		parts := strings.Split(mm, ".")
-		if len(parts) < 2 {
+		// ^0.y.z -> >=0.y.z <0.(y+1).0 when y > 0
+		// ^0.0.z -> >=0.0.z <0.0.(z+1)  when y == 0 (strict patch bound)
+		// Parse numeric parts from the normalized lower bound.
+		trimmed := strings.TrimPrefix(lower, "v")
+		// Strip any prerelease / build metadata for numeric parsing.
+		core := trimmed
+		if i := strings.IndexAny(core, "-+"); i >= 0 {
+			core = core[:i]
+		}
+		parts := strings.Split(core, ".")
+		if len(parts) < 3 {
 			return false, fmt.Errorf("semver.Match: malformed caret lower bound %q", raw)
 		}
-		nextMinor, err := incInt(parts[1])
-		if err != nil {
-			return false, err
+		if parts[1] == "0" {
+			// Both major and minor are zero — pin to exact patch.
+			nextPatch, err := incInt(parts[2])
+			if err != nil {
+				return false, err
+			}
+			upper = "v" + parts[0] + "." + parts[1] + "." + nextPatch
+		} else {
+			nextMinor, err := incInt(parts[1])
+			if err != nil {
+				return false, err
+			}
+			upper = "v" + parts[0] + "." + nextMinor + ".0"
 		}
-		upper = "v" + parts[0] + "." + nextMinor + ".0"
 	} else {
 		nextMajor, err := incInt(majorStr)
 		if err != nil {

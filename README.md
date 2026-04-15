@@ -1,6 +1,6 @@
 # skillpack
 
-![Go](https://img.shields.io/badge/Go-1.21+-00ADD8?style=for-the-badge&logo=go&logoColor=white)
+![Go](https://img.shields.io/badge/Go-1.26+-00ADD8?style=for-the-badge&logo=go&logoColor=white)
 ![Tests](https://img.shields.io/badge/tests-188%2B-brightgreen?style=for-the-badge)
 ![License](https://img.shields.io/badge/license-MIT-blue?style=for-the-badge)
 ![Status](https://img.shields.io/badge/status-stable-success?style=for-the-badge)
@@ -348,6 +348,7 @@ mode:
 | `3` | IO error | Filesystem, permission, or missing-file error |
 | `4` | Internal error | An unexpected bug in skillpack itself |
 | `5` | Usage error | Invalid CLI flags or missing required arguments |
+| `6` | Security | `sign --verify` failed (tampered bundle or wrong key) — treat as a hard-fail, never a routine lock refresh |
 
 CI example:
 
@@ -357,6 +358,7 @@ case $? in
   0) echo "All skills clean" ;;
   1) echo "Drift detected — open a PR to update skillpack.lock" ; exit 1 ;;
   2) echo "Skill file is broken — block merge" ; exit 1 ;;
+  6) echo "SIGNATURE TAMPER — do not merge, investigate" ; exit 1 ;;
   *) echo "skillpack itself failed — investigate" ; exit 1 ;;
 esac
 ```

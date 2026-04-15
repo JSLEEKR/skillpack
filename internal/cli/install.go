@@ -38,7 +38,7 @@ Run 'skillpack verify' afterwards to check the lockfile against disk.`,
 			if err := lockfile.WriteFile(path, lf); err != nil {
 				return err
 			}
-			fmt.Fprintf(state.stdout, "skillpack: wrote %s (%d skills)\n", path, len(lf.Skills))
+			fmt.Fprintf(state.stdout, "skillpack: wrote %s (%d %s)\n", path, len(lf.Skills), pluralSkill(len(lf.Skills)))
 			if state.verbose {
 				for _, e := range lf.Skills {
 					fmt.Fprintf(state.stdout, "  %s\n", lockfile.FormatHashLine(e))

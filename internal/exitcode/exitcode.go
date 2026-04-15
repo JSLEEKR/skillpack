@@ -15,6 +15,7 @@ const (
 	IO       = 3 // filesystem / permission error
 	Internal = 4 // unexpected bug; should not happen in practice
 	Usage    = 5 // CLI usage error (bad flags)
+	Security = 6 // signature verification failed / tamper detected
 )
 
 // Class is a typed wrapper so errors can carry an exit code through
@@ -36,6 +37,8 @@ func (c Class) Error() string {
 		return "internal error"
 	case Usage:
 		return "usage error"
+	case Security:
+		return "security error"
 	default:
 		return "unknown"
 	}

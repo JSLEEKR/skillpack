@@ -109,7 +109,10 @@ func Verify(pub ed25519.PublicKey, payload, sigFile []byte) error {
 		return exitcode.Wrap(exitcode.Parse, fmt.Errorf("signer: invalid signature size: %d", len(sig)))
 	}
 	if !ed25519.Verify(pub, payload, sig) {
-		return exitcode.Wrap(exitcode.Drift, errors.New("signer: signature does not verify"))
+		// A tampered payload or wrong-key signature is a SECURITY event,
+		// not lockfile drift. Emit a dedicated exit code so CI pipelines can
+		// treat this as a hard-fail instead of a routine "refresh the lock".
+		return exitcode.Wrap(exitcode.Security, errors.New("signer: signature does not verify"))
 	}
 	return nil
 }

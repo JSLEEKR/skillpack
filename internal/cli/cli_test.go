@@ -253,3 +253,108 @@ func TestCLIVerifyJSON(t *testing.T) {
 		t.Errorf("not valid json: %v", err)
 	}
 }
+
+// TestCLIVerifyDeletedFile covers H2: when a skill file is deleted from disk
+// after install, `verify` must exit with the Drift code (1), NOT the Parse
+// code (2). Deleting a file is a textbook drift case — CI should route it to
+// "lockfile drift, open a PR", not "broken config, block merge".
+func TestCLIVerifyDeletedFile(t *testing.T) {
+	dir := setupCLIWorkspace(t)
+	_, _, code := runCLI(t, "install", "--root", dir)
+	if code != exitcode.OK {
+		t.Fatalf("install exit = %d", code)
+	}
+	// Delete one of the skill files (skill "a" is depended on by "b", so the
+	// resolver would normally flag [missing] as a Parse error — this test
+	// verifies verify bypasses that path).
+	if err := os.Remove(filepath.Join(dir, "skills", "a", "SKILL.md")); err != nil {
+		t.Fatalf("remove: %v", err)
+	}
+	stdout, _, code := runCLI(t, "verify", "--root", dir)
+	if code != exitcode.Drift {
+		t.Errorf("expected drift code %d, got %d, output: %s", exitcode.Drift, code, stdout)
+	}
+	if !strings.Contains(stdout, "missing") {
+		t.Errorf("expected 'missing' finding, got: %s", stdout)
+	}
+}
+
+// TestCLIBundleListFromDisk covers M2: `bundle --list <path.skl>` must
+// inspect the on-disk bundle, not re-resolve the workspace. Without this
+// fix, the positional argument was silently ignored.
+func TestCLIBundleListFromDisk(t *testing.T) {
+	dir := setupCLIWorkspace(t)
+	out := filepath.Join(dir, "test.skl")
+	_, _, code := runCLI(t, "bundle", "--root", dir, "--out", out)
+	if code != exitcode.OK {
+		t.Fatalf("bundle exit = %d", code)
+	}
+	// Move to a different workspace dir that is empty — if --list read the
+	// workspace, it would fail; reading the bundle path must succeed.
+	emptyDir := t.TempDir()
+	manData := "name: other\nversion: 1.0.0\nskills: []\n"
+	_ = os.WriteFile(filepath.Join(emptyDir, "skillpack.yaml"), []byte(manData), 0644)
+	stdout, _, code := runCLI(t, "bundle", "--root", emptyDir, "--list", out)
+	if code != exitcode.OK {
+		t.Errorf("exit = %d, out: %s", code, stdout)
+	}
+	if !strings.Contains(stdout, "manifest.json") {
+		t.Errorf("no manifest in list: %q", stdout)
+	}
+	// Must also contain entries for skills a and b from the bundled workspace.
+	if !strings.Contains(stdout, "a") || !strings.Contains(stdout, "b") {
+		t.Errorf("expected skills a and b in list, got: %s", stdout)
+	}
+}
+
+// TestCLISignTamperedIsSecurity covers M3: a tampered bundle must exit with
+// the Security code (6), not Drift (1). A signature-verification failure is a
+// security event and should never be confused with a routine lockfile drift.
+func TestCLISignTamperedIsSecurity(t *testing.T) {
+	dir := setupCLIWorkspace(t)
+	priv := filepath.Join(dir, "priv.key")
+	pub := filepath.Join(dir, "pub.key")
+	if _, _, code := runCLI(t, "keygen", "--priv", priv, "--pub", pub); code != exitcode.OK {
+		t.Fatalf("keygen exit = %d", code)
+	}
+	bundlePath := filepath.Join(dir, "test.skl")
+	if _, _, code := runCLI(t, "bundle", "--root", dir, "--out", bundlePath); code != exitcode.OK {
+		t.Fatal("bundle failed")
+	}
+	if _, _, code := runCLI(t, "sign", "--key", priv, bundlePath); code != exitcode.OK {
+		t.Fatalf("sign exit = %d", code)
+	}
+	// Tamper with the bundle body.
+	f, err := os.OpenFile(bundlePath, os.O_APPEND|os.O_WRONLY, 0644)
+	if err != nil {
+		t.Fatalf("open tamper: %v", err)
+	}
+	_, _ = f.Write([]byte("TAMPER"))
+	_ = f.Close()
+	_, stderr, code := runCLI(t, "sign", "--verify", "--pubkey", pub, bundlePath)
+	if code != exitcode.Security {
+		t.Errorf("expected Security code %d, got %d, stderr: %s", exitcode.Security, code, stderr)
+	}
+}
+
+// TestCLIInstallPluralisation covers L3: ensure the CLI uses the singular
+// form "(1 skill)" rather than the incorrect "(1 skills)" when exactly one
+// skill is installed.
+func TestCLIInstallPluralisation(t *testing.T) {
+	dir := t.TempDir()
+	manData := "name: solo\nversion: 1.0.0\nskills:\n  - ./skills\n"
+	_ = os.WriteFile(filepath.Join(dir, "skillpack.yaml"), []byte(manData), 0644)
+	_ = os.MkdirAll(filepath.Join(dir, "skills", "only"), 0755)
+	_ = os.WriteFile(filepath.Join(dir, "skills", "only", "SKILL.md"),
+		[]byte("---\nname: only\nversion: 1.0.0\n---\njust one\n"), 0644)
+	stdout, _, code := runCLI(t, "install", "--root", dir)
+	if code != exitcode.OK {
+		t.Fatalf("install exit = %d", code)
+	}
+	if !strings.Contains(stdout, "(1 skill)") {
+		t.Errorf("expected singular '(1 skill)', got: %q", stdout)
+	}
+	if strings.Contains(stdout, "(1 skills)") {
+		t.Errorf("unexpected plural '(1 skills)' in output: %q", stdout)
+	}
+}

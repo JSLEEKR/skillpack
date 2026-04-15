@@ -24,3 +24,7 @@ Thumbs.db
 # Local testing
 /tmp/
 testdata-local/
+
+# Eval pipeline
+.eval-notes-*.md
+.harness/

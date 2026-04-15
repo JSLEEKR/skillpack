@@ -44,6 +44,15 @@ running 'install' side effects (does not create the file if missing — use
 	return cmd
 }
 
+// pluralSkill returns "skill" or "skills" depending on count, so CLI messages
+// read correctly for n == 1 ("wrote lock (1 skill)") vs the plural case.
+func pluralSkill(n int) string {
+	if n == 1 {
+		return "skill"
+	}
+	return "skills"
+}
+
 // writeFileSecure writes data to path with mode 0600, creating parent dirs as
 // needed. Used by `keygen` so private keys are not world-readable.
 func writeFileSecure(path string, data []byte) error {
