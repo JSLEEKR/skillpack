@@ -1,7 +1,9 @@
 package cli
 
 import (
+	"errors"
 	"fmt"
+	"os"
 
 	"github.com/spf13/cobra"
 
@@ -56,12 +58,22 @@ func newSignCmd(state *rootState) *cobra.Command {
 
 func newKeygenCmd(state *rootState) *cobra.Command {
 	var privPath, pubPath string
+	var force bool
 	cmd := &cobra.Command{
 		Use:   "keygen",
 		Short: "Generate an ed25519 keypair for signing bundles",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if privPath == "" || pubPath == "" {
 				return exitcode.Wrap(exitcode.Usage, fmt.Errorf("--priv and --pub are required"))
+			}
+			if !force {
+				for _, p := range []string{privPath, pubPath} {
+					if _, err := os.Stat(p); err == nil {
+						return exitcode.Wrap(exitcode.Usage, fmt.Errorf("refusing to overwrite existing key %q (use --force)", p))
+					} else if !errors.Is(err, os.ErrNotExist) {
+						return exitcode.Wrap(exitcode.IO, fmt.Errorf("stat %q: %w", p, err))
+					}
+				}
 			}
 			priv, pub, err := signer.GenerateKeypair()
 			if err != nil {
@@ -79,5 +91,6 @@ func newKeygenCmd(state *rootState) *cobra.Command {
 	}
 	cmd.Flags().StringVar(&privPath, "priv", "", "private key output path")
 	cmd.Flags().StringVar(&pubPath, "pub", "", "public key output path")
+	cmd.Flags().BoolVar(&force, "force", false, "overwrite existing key files")
 	return cmd
 }

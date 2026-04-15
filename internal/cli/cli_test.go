@@ -174,6 +174,40 @@ func TestCLIKeygenSignVerify(t *testing.T) {
 	}
 }
 
+func TestCLIKeygenRefusesOverwrite(t *testing.T) {
+	dir := t.TempDir()
+	priv := filepath.Join(dir, "k.priv")
+	pub := filepath.Join(dir, "k.pub")
+	if _, _, code := runCLI(t, "keygen", "--priv", priv, "--pub", pub); code != exitcode.OK {
+		t.Fatalf("first keygen exit = %d", code)
+	}
+	origPriv, err := os.ReadFile(priv)
+	if err != nil {
+		t.Fatalf("read priv: %v", err)
+	}
+	_, stderr, code := runCLI(t, "keygen", "--priv", priv, "--pub", pub)
+	if code != exitcode.Usage {
+		t.Errorf("second keygen without --force: exit = %d, want Usage; stderr=%q", code, stderr)
+	}
+	afterPriv, err := os.ReadFile(priv)
+	if err != nil {
+		t.Fatalf("read priv after: %v", err)
+	}
+	if !bytes.Equal(origPriv, afterPriv) {
+		t.Error("private key was overwritten despite refusal exit code")
+	}
+	if _, _, code := runCLI(t, "keygen", "--priv", priv, "--pub", pub, "--force"); code != exitcode.OK {
+		t.Errorf("keygen --force exit = %d", code)
+	}
+	forcedPriv, err := os.ReadFile(priv)
+	if err != nil {
+		t.Fatalf("read priv forced: %v", err)
+	}
+	if bytes.Equal(origPriv, forcedPriv) {
+		t.Error("--force did not rewrite the private key")
+	}
+}
+
 func TestCLISignMissingKey(t *testing.T) {
 	dir := setupCLIWorkspace(t)
 	bundlePath := filepath.Join(dir, "test.skl")
