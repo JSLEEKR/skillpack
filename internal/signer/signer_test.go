@@ -144,6 +144,36 @@ func TestSignatureFormat(t *testing.T) {
 	}
 }
 
+// Eval Cycle B — B3. Any third non-empty line in a key file must cause a
+// clear rejection instead of being silently discarded.
+func TestLoadPrivateKeyRejectsTrailingGarbage(t *testing.T) {
+	priv, _, _ := GenerateKeypair()
+	appended := append([]byte{}, priv...)
+	appended = append(appended, []byte("GARBAGE_EXTRA_LINE\n")...)
+	_, err := LoadPrivateKey(appended)
+	if err == nil {
+		t.Fatalf("expected error on trailing garbage, got nil")
+	}
+	if !strings.Contains(err.Error(), "unexpected trailing data") {
+		t.Errorf("error should mention trailing data, got: %v", err)
+	}
+}
+
+func TestLoadPrivateKeyRejectsMultiLineBody(t *testing.T) {
+	// Simulate an OpenSSH-style chunked base64 body (two lines instead of one).
+	priv, _, _ := GenerateKeypair()
+	parts := strings.SplitN(strings.TrimSpace(string(priv)), "\n", 2)
+	if len(parts) != 2 {
+		t.Fatalf("unexpected key shape: %q", priv)
+	}
+	header, body := parts[0], parts[1]
+	half := len(body) / 2
+	wrapped := []byte(header + "\n" + body[:half] + "\n" + body[half:] + "\n")
+	if _, err := LoadPrivateKey(wrapped); err == nil {
+		t.Errorf("expected error on multi-line base64 body")
+	}
+}
+
 func TestVerifyBadSigFormat(t *testing.T) {
 	_, pub, _ := GenerateKeypair()
 	u, _ := LoadPublicKey(pub)

@@ -149,6 +149,38 @@ func TestExitCodeNil(t *testing.T) {
 	}
 }
 
+// Eval Cycle B — duplicate-name regression. After H2 removed the resolver
+// from verify's path, two disk files declaring the same name stopped
+// producing a clear duplicate finding. Re-establish the contract.
+func TestRunDuplicateNameOnDisk(t *testing.T) {
+	dir := t.TempDir()
+	pathA := filepath.Join(dir, "a")
+	_ = os.MkdirAll(pathA, 0755)
+	pathAFile := filepath.Join(pathA, "SKILL.md")
+	_ = os.WriteFile(pathAFile, []byte("---\nname: shared\nversion: 1.0.0\n---\nbody1\n"), 0644)
+	pathB := filepath.Join(dir, "b")
+	_ = os.MkdirAll(pathB, 0755)
+	pathBFile := filepath.Join(pathB, "SKILL.md")
+	_ = os.WriteFile(pathBFile, []byte("---\nname: shared\nversion: 1.0.0\n---\nbody2\n"), 0644)
+	lf := &lockfile.Lockfile{Version: 1}
+	res, err := Run(lf, []string{pathAFile, pathBFile})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res.OK {
+		t.Errorf("expected duplicate-name drift, got OK")
+	}
+	foundDup := false
+	for _, f := range res.Findings {
+		if f.Kind == "drift" && f.Name == "shared" {
+			foundDup = true
+		}
+	}
+	if !foundDup {
+		t.Errorf("missing duplicate-name drift finding: %+v", res.Findings)
+	}
+}
+
 func TestRunFindingsSorted(t *testing.T) {
 	dir := t.TempDir()
 	pathA := filepath.Join(dir, "a")

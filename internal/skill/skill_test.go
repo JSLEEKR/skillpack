@@ -82,6 +82,27 @@ func TestSkillValidate(t *testing.T) {
 	}
 }
 
+// Eval Cycle B — B2: defense-in-depth at skill.Validate. These names must
+// be rejected here, NOT downstream in the bundler, so a poisoned lockfile
+// can never be written to disk.
+func TestSkillValidateB2DotNames(t *testing.T) {
+	bad := []*Skill{
+		{Name: ".", Version: "1.0.0", Format: FormatSkillMD},
+		{Name: "..", Version: "1.0.0", Format: FormatSkillMD},
+		{Name: ".hidden", Version: "1.0.0", Format: FormatSkillMD},
+		{Name: "../evil", Version: "1.0.0", Format: FormatSkillMD},
+		{Name: "foo/../bar", Version: "1.0.0", Format: FormatSkillMD},
+		{Name: "..foo", Version: "1.0.0", Format: FormatSkillMD},
+		{Name: " leading", Version: "1.0.0", Format: FormatSkillMD},
+		{Name: "trailing ", Version: "1.0.0", Format: FormatSkillMD},
+	}
+	for _, s := range bad {
+		if err := s.Validate(); err == nil {
+			t.Errorf("Validate(%q) = nil, want error", s.Name)
+		}
+	}
+}
+
 func TestSortedFrontmatterKeys(t *testing.T) {
 	s := &Skill{Frontmatter: map[string]string{"z": "1", "a": "2", "m": "3"}}
 	got := s.SortedFrontmatterKeys()

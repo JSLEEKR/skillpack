@@ -17,9 +17,10 @@ func newLockCmd(state *rootState) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "lock",
 		Short: "Rewrite skillpack.lock from current workspace state",
-		Long: `Equivalent to 'install' but always overwrites skillpack.lock without
-running 'install' side effects (does not create the file if missing — use
-'install' for first-time generation).`,
+		Long: `Rewrites skillpack.lock from the current workspace state. Equivalent
+to 'install' for the lockfile step, but without any other 'install' side
+effects. The file is created if missing and overwritten atomically if
+present.`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			abs, err := filepath.Abs(state.root)
 			if err != nil {

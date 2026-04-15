@@ -143,7 +143,25 @@ func matchOp(nv, op, raw string) (bool, error) {
 }
 
 func matchCaret(nv, raw string) (bool, error) {
-	lower := Normalize(raw)
+	// Accept 2-part inputs (e.g. "0.5", "1.2") by implicitly appending ".0".
+	// This keeps behavior consistent: `^1.2` is accepted (xsemver.Normalize
+	// treats "1.2" as valid via MajorMinor), and `^0.5` must be accepted too.
+	// Without this, the 0.x branch below rejects 2-part inputs with
+	// "malformed caret lower bound", inconsistent with the non-zero major
+	// branch.
+	rawCore := strings.TrimSpace(raw)
+	if rawCore != "" {
+		// Count numeric dotted segments (ignore prerelease/build).
+		head := rawCore
+		if i := strings.IndexAny(head, "-+"); i >= 0 {
+			head = head[:i]
+		}
+		head = strings.TrimPrefix(head, "v")
+		if parts := strings.Split(head, "."); len(parts) == 2 {
+			rawCore = head + ".0"
+		}
+	}
+	lower := Normalize(rawCore)
 	if lower == "" {
 		return false, fmt.Errorf("semver.Match: invalid caret %q", raw)
 	}

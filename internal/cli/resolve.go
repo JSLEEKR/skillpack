@@ -44,7 +44,7 @@ func newResolveCmd(state *rootState) *cobra.Command {
 				fmt.Fprintln(state.stdout, "skillpack: no skills found")
 				return nil
 			}
-			fmt.Fprintf(state.stdout, "Install order (%d skills):\n", len(loaded.Skills))
+			fmt.Fprintf(state.stdout, "Install order (%d %s):\n", len(loaded.Skills), pluralSkill(len(loaded.Skills)))
 			for i, s := range loaded.Skills {
 				fmt.Fprintf(state.stdout, "  %d. %s@%s [%s] — %s\n", i+1, s.Name, s.Version, s.Format, s.SourcePath)
 			}

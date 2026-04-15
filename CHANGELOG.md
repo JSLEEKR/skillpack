@@ -30,8 +30,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `sign`, `keygen`, `lock`.
 - Single static Go binary under 5 MB.
 
+### Security hardening (Eval Cycle B)
+
+- Manifest `skills:` entries are now constrained to the workspace root:
+  absolute paths, drive-letter paths, `..` segments, and POSIX-rooted
+  paths are all rejected with exit code 2 (Parse). Symlinks that point
+  outside the workspace are also rejected post-`EvalSymlinks`.
+- Skill names `.`, `..`, leading-dot (e.g. `.hidden`), embedded `..`, and
+  names with leading/trailing whitespace are rejected at validate time,
+  preventing poisoned lockfile entries.
+- Private key files require exactly two non-empty lines; trailing garbage
+  and multi-line base64 bodies produce clear `malformed key` errors.
+- `bundle --list` hardens against tainted archives: caps 10,000 entries,
+  rejects non-regular types (symlink/hardlink/device/fifo), enforces
+  `assertSafePath` on every entry name.
+- Dedicated exit code `Security = 6` for signature tamper / verification
+  failure.
+
 ### Quality
 
-- 188+ tests across unit and integration layers.
+- **205 tests** across unit and integration layers (192 initial + 13 from
+  Eval Cycle B).
 - `go vet` clean, race-detector clean.
 - Cross-platform: tested on Windows, Linux, macOS paths.

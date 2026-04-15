@@ -358,3 +358,46 @@ func TestCLIInstallPluralisation(t *testing.T) {
 		t.Errorf("unexpected plural '(1 skills)' in output: %q", stdout)
 	}
 }
+
+// Eval Cycle B — B5. `skillpack resolve` had a hard-coded "(%d skills)"
+// format string that L3's pluralSkill helper didn't reach. Regression test
+// makes sure `resolve` says "(1 skill)" for a single-skill workspace and
+// that "(1 skills)" never appears in the output.
+func TestCLIResolvePluralisation(t *testing.T) {
+	dir := t.TempDir()
+	manData := "name: solo\nversion: 1.0.0\nskills:\n  - ./skills\n"
+	_ = os.WriteFile(filepath.Join(dir, "skillpack.yaml"), []byte(manData), 0644)
+	_ = os.MkdirAll(filepath.Join(dir, "skills", "only"), 0755)
+	_ = os.WriteFile(filepath.Join(dir, "skills", "only", "SKILL.md"),
+		[]byte("---\nname: only\nversion: 1.0.0\n---\njust one\n"), 0644)
+	stdout, _, code := runCLI(t, "resolve", "--root", dir)
+	if code != exitcode.OK {
+		t.Fatalf("resolve exit = %d", code)
+	}
+	if !strings.Contains(stdout, "(1 skill)") {
+		t.Errorf("expected singular '(1 skill)', got: %q", stdout)
+	}
+	if strings.Contains(stdout, "(1 skills)") {
+		t.Errorf("unexpected plural '(1 skills)' in output: %q", stdout)
+	}
+}
+
+// Eval Cycle B — B1. A `skillpack.yaml` whose `skills:` entry escapes the
+// workspace root (absolute path, `..`, drive letter) must be rejected with
+// a Parse exit code before any filesystem walk happens. This is the
+// adversarial probe from the Cycle B notes baked into the CLI test suite.
+func TestCLISkillsEntryRejectsEscapes(t *testing.T) {
+	cases := []string{
+		"name: x\nversion: 1.0.0\nskills:\n  - ../../etc/passwd\n",
+		"name: x\nversion: 1.0.0\nskills:\n  - /etc/passwd\n",
+		"name: x\nversion: 1.0.0\nskills:\n  - \"C:/Windows\"\n",
+	}
+	for _, manData := range cases {
+		dir := t.TempDir()
+		_ = os.WriteFile(filepath.Join(dir, "skillpack.yaml"), []byte(manData), 0644)
+		_, _, code := runCLI(t, "install", "--root", dir)
+		if code != exitcode.Parse {
+			t.Errorf("install with %q: expected Parse (%d), got %d", manData, exitcode.Parse, code)
+		}
+	}
+}

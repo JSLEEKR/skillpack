@@ -10,7 +10,9 @@ import (
 	"bytes"
 	"fmt"
 	"os"
+	"path/filepath"
 	"sort"
+	"strings"
 
 	"gopkg.in/yaml.v3"
 
@@ -71,7 +73,52 @@ func Unmarshal(data []byte) (*Workspace, error) {
 	if w.Version == "" {
 		return nil, exitcode.Wrap(exitcode.Parse, fmt.Errorf("manifest: missing `version`"))
 	}
+	for _, p := range w.Skills {
+		if err := ValidateSkillPath(p); err != nil {
+			return nil, err
+		}
+	}
 	return &w, nil
+}
+
+// ValidateSkillPath rejects `skills:` entries that could escape the workspace
+// root. A shared skillpack.yaml is untrusted input (anyone can commit one),
+// so we refuse absolute paths, drive-letter paths, and any path containing
+// ".." segments before the caller ever touches the filesystem.
+//
+// The escape check in workspace.Discover is defense-in-depth; this function
+// is the first line and fails fast with an exitcode.Parse error.
+func ValidateSkillPath(p string) error {
+	raw := p
+	p = strings.TrimSpace(p)
+	if p == "" {
+		return exitcode.Wrap(exitcode.Parse, fmt.Errorf("manifest: empty skills entry"))
+	}
+	if strings.ContainsRune(p, 0) {
+		return exitcode.Wrap(exitcode.Parse, fmt.Errorf("manifest: skills entry contains NUL: %q", raw))
+	}
+	if filepath.IsAbs(p) {
+		return exitcode.Wrap(exitcode.Parse, fmt.Errorf("manifest: absolute skills path not allowed: %q", raw))
+	}
+	// Reject POSIX-absolute paths even on Windows (where filepath.IsAbs
+	// treats "/foo" as relative). Otherwise a Linux-authored manifest slips
+	// straight to "/etc/passwd" when opened on Windows.
+	if strings.HasPrefix(p, "/") || strings.HasPrefix(p, "\\") {
+		return exitcode.Wrap(exitcode.Parse, fmt.Errorf("manifest: rooted skills path not allowed: %q", raw))
+	}
+	// Drive-letter paths ("C:\\..." or "C:/...") — explicitly reject on
+	// every platform for consistency.
+	if len(p) >= 2 && p[1] == ':' {
+		return exitcode.Wrap(exitcode.Parse, fmt.Errorf("manifest: drive-letter skills path not allowed: %q", raw))
+	}
+	// Split on both slash flavors so "..\\foo" is caught on POSIX too.
+	segs := strings.FieldsFunc(p, func(r rune) bool { return r == '/' || r == '\\' })
+	for _, seg := range segs {
+		if seg == ".." {
+			return exitcode.Wrap(exitcode.Parse, fmt.Errorf("manifest: skills path escapes workspace: %q", raw))
+		}
+	}
+	return nil
 }
 
 // ReadFile reads and validates a workspace manifest from disk.

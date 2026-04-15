@@ -142,6 +142,14 @@ func TestMatchCaret(t *testing.T) {
 		{"0.1.0", "^0.0.1", false},
 		{"0.0.3", "^0.0.3", true},
 		{"0.0.4", "^0.0.3", false},
+		// Eval Cycle B — 2-part caret consistency. `^1.2` was accepted, so
+		// `^0.5` must be too. 2-part input is read as `MAJOR.MINOR.0`.
+		{"1.2.0", "^1.2", true},
+		{"1.9.9", "^1.2", true},
+		{"2.0.0", "^1.2", false},
+		{"0.5.0", "^0.5", true},
+		{"0.5.3", "^0.5", true},
+		{"0.6.0", "^0.5", false},
 	}
 	for _, tc := range tests {
 		got, err := Match(tc.v, tc.c)

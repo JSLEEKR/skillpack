@@ -125,6 +125,58 @@ func TestWriteFileOverwrite(t *testing.T) {
 	}
 }
 
+// Eval Cycle B — B1 supply-chain hardening. ValidateSkillPath must reject
+// every shape of path that escapes the workspace root.
+func TestValidateSkillPathRejectsEscapes(t *testing.T) {
+	bad := []string{
+		"",
+		"   ",
+		"/etc/passwd",
+		"/Users/alice/.ssh",
+		`\Windows\System32`,
+		"C:/Windows/System32",
+		`C:\Windows\System32`,
+		`D:/data`,
+		"../sibling",
+		"../../outside",
+		"skills/../../outside",
+		`skills\..\..\outside`,
+		"skills/ok/../../escape",
+	}
+	for _, p := range bad {
+		if err := ValidateSkillPath(p); err == nil {
+			t.Errorf("ValidateSkillPath(%q) = nil, want error", p)
+		}
+	}
+}
+
+func TestValidateSkillPathAcceptsSafe(t *testing.T) {
+	good := []string{
+		"./skills",
+		"skills",
+		"skills/foo",
+		"skills/foo/bar",
+		"a/b/c",
+		"skills/*.md",
+	}
+	for _, p := range good {
+		if err := ValidateSkillPath(p); err != nil {
+			t.Errorf("ValidateSkillPath(%q) = %v, want nil", p, err)
+		}
+	}
+}
+
+func TestUnmarshalRejectsEscapingSkills(t *testing.T) {
+	yamlDoc := "name: x\nversion: 1.0.0\nskills:\n  - ../../etc/passwd\n"
+	if _, err := Unmarshal([]byte(yamlDoc)); err == nil {
+		t.Fatalf("Unmarshal accepted escaping skills entry")
+	}
+	yamlDoc2 := "name: x\nversion: 1.0.0\nskills:\n  - /absolute\n"
+	if _, err := Unmarshal([]byte(yamlDoc2)); err == nil {
+		t.Fatalf("Unmarshal accepted absolute skills entry")
+	}
+}
+
 func indexOf(data []byte, s string) int {
 	ds := string(data)
 	for i := 0; i+len(s) <= len(ds); i++ {

@@ -49,12 +49,29 @@ func Run(lf *lockfile.Lockfile, skillFiles []string) (*Result, error) {
 
 	// Parse every disk file and check against lockfile.
 	seen := make(map[string]bool)
+	// Duplicate-name detection: when two disk files declare the same name,
+	// the H2 fix bypassed the resolver so this case stopped producing a
+	// clear error. We re-add a direct check here so verify flags the
+	// collision as drift instead of silently overwriting `seen` and
+	// producing a misleading hash mismatch.
+	firstPath := make(map[string]string)
 	for _, p := range skillFiles {
 		s, err := parser.ParseFile(p)
 		if err != nil {
 			// Parse errors propagate with their original exit code.
 			return nil, err
 		}
+		if prev, dup := firstPath[s.Name]; dup {
+			res.Drifted = append(res.Drifted, Finding{
+				Name:    s.Name,
+				Kind:    "drift",
+				Want:    prev,
+				Got:     p,
+				Message: fmt.Sprintf("duplicate skill name %q on disk (%s and %s)", s.Name, prev, p),
+			})
+			continue
+		}
+		firstPath[s.Name] = p
 		seen[s.Name] = true
 		entry, ok := lockByName[s.Name]
 		if !ok {

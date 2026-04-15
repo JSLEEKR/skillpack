@@ -36,7 +36,7 @@ gzipped tarball → ed25519 detached signatures → CI drift verifier.
 | `internal/verify` | 145 | 12 | CI drift detection |
 | `internal/exitcode` | 80 | 7 | typed errors → exit codes |
 
-Total: ~5,400 lines of Go, **192 tests**.
+Total: ~5,600 lines of Go, **205 tests** (192 initial + 13 from Eval Cycle B fixes).
 
 ## Dependencies (exactly three, plus pflag transitively from cobra)
 
@@ -137,6 +137,54 @@ Cycle A found 7 issues; all fixed in this round before handing to Cycle B:
   to match the README example (no longer a latent yaml.v3 default).
 - **L3** Install/bundle CLI output pluralisation fixed via `pluralSkill(n)`:
   `(1 skill)` vs `(2 skills)`. New test `TestCLIInstallPluralisation`.
+
+## Eval Cycle B — fixes applied
+
+Cycle B found 5 new bugs plus 3 polish items; all fixed:
+
+- **B1 (HIGH, supply-chain)** — `skillpack.yaml` `skills:` entries were
+  unconstrained, enabling arbitrary filesystem walks (absolute paths,
+  `../..` escapes, drive-letter paths) that would ingest files into the
+  lockfile + signed bundle. Fix: `manifest.ValidateSkillPath` rejects
+  every rooted / escaping form; `workspace.Discover` double-checks via
+  `filepath.Rel` and runs post-symlink `assertInsideRoot` on every
+  discovered file; `cli/add` validates before writing to disk. New tests:
+  `TestValidateSkillPathRejectsEscapes`, `TestValidateSkillPathAcceptsSafe`,
+  `TestUnmarshalRejectsEscapingSkills`, `TestCLISkillsEntryRejectsEscapes`.
+- **B2 (MED)** — `skill.Validate` accepted `.` / `..` / leading-dot names.
+  Fix: reject `.`, `..`, any leading `.`, embedded `..`, or leading/trailing
+  whitespace. New test `TestSkillValidateB2DotNames`.
+- **B3 (MED)** — `signer.decodeKey` silently ignored data past the first two
+  lines. Fix: require EXACTLY two non-empty lines; reject trailing garbage
+  and multi-line base64 bodies with clear errors. New tests
+  `TestLoadPrivateKeyRejectsTrailingGarbage`,
+  `TestLoadPrivateKeyRejectsMultiLineBody`.
+- **B4 (LOW)** — `bundle.Inspect` had no entry cap, no type filter, no safe
+  path check. Fix: cap 10,000 entries, cap per-entry claimed size at 1 GiB,
+  reject non-regular entries (symlink/hardlink/device/fifo), run
+  `assertSafePath` on every name. New tests
+  `TestInspectRejectsTraversalEntry`, `TestInspectRejectsAbsoluteEntry`,
+  `TestInspectRejectsSymlinkEntry`, `TestInspectRejectsDriveLetterEntry`.
+- **B5 (LOW)** — `resolve` still said "(1 skills)". Fix: use `pluralSkill`.
+  New test `TestCLIResolvePluralisation`.
+- **Polish: matchCaret consistency** — `^1.2` accepted but `^0.5` rejected.
+  Fix: implicitly append `.0` patch to 2-part caret inputs so both are
+  handled. New semver table cases for `^1.2` and `^0.5`.
+- **Polish: lock.go doc** — rewrote the Long description to match reality
+  (the file IS created if missing).
+- **Polish: verify duplicate-name regression (post-H2)** — verify now
+  walks disk files, detects name collisions directly, and reports them as
+  drift. New test `TestRunDuplicateNameOnDisk`.
+
+Live adversarial probes (all return the right exit code):
+
+- `skills: [../../Windows/System32]` → exit 2 Parse, clear error
+- `skills: [/etc/passwd]` → exit 2 Parse, clear error
+- SKILL.md with `name: ".."` → exit 2 Parse, `skill name ".." is reserved`
+- Append garbage to private key, then sign → exit 2,
+  `signer: malformed key: unexpected trailing data`
+- Tainted `.skl` with `../evil` entry fed to `bundle --list` → exit 2,
+  `bundle: traversal path not allowed`
 
 ## Files created
 

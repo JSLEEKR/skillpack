@@ -78,12 +78,31 @@ type Skill struct {
 }
 
 // Validate checks the minimum-viable invariants every format must satisfy.
+//
+// Name rules (B2 hardening): must be non-empty, must not equal "." or "..",
+// must not start with "." (reserves leading-dot for hidden/system files),
+// must not contain path separators, must not contain whitespace, and must
+// not carry leading/trailing whitespace. These rules are applied here so
+// that a poisoned `name:` never reaches the lockfile — the bundler's
+// assertSafePath is defense-in-depth, not the primary gate.
 func (s *Skill) Validate() error {
 	if s == nil {
 		return fmt.Errorf("nil skill")
 	}
-	if strings.TrimSpace(s.Name) == "" {
+	if s.Name == "" {
 		return fmt.Errorf("skill name is required")
+	}
+	if strings.TrimSpace(s.Name) != s.Name {
+		return fmt.Errorf("skill name has leading/trailing whitespace: %q", s.Name)
+	}
+	if s.Name == "." || s.Name == ".." {
+		return fmt.Errorf("skill name %q is reserved", s.Name)
+	}
+	if strings.HasPrefix(s.Name, ".") {
+		return fmt.Errorf("skill name may not start with '.': %q", s.Name)
+	}
+	if strings.Contains(s.Name, "..") {
+		return fmt.Errorf("skill name may not contain '..': %q", s.Name)
 	}
 	if strings.ContainsAny(s.Name, " \t\r\n\\/") {
 		return fmt.Errorf("skill name contains invalid characters: %q", s.Name)

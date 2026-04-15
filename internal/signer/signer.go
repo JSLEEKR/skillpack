@@ -74,15 +74,39 @@ func LoadPublicKey(data []byte) (ed25519.PublicKey, error) {
 	return ed25519.PublicKey(key), nil
 }
 
+// decodeKey parses a skillpack-format key file. The format is EXACTLY two
+// non-empty lines:
+//
+//	<header>\n
+//	<base64>\n
+//
+// Any trailing non-empty line is rejected. This keeps `sign` honest — a
+// corrupted or concatenated key file (e.g. `cat garbage >> key.priv`) is a
+// hard error, not silently-accepted-with-only-the-first-two-lines.
+//
+// PEM / OpenSSH-style multi-line base64 bodies are intentionally rejected:
+// if a user pastes such a body, the correct fix is to rewrap it to a single
+// line, not to pretend we understand PEM.
 func decodeKey(data []byte) ([]byte, string, error) {
-	// Normalize CRLF.
+	// Normalize CRLF so CRLF-terminated key files from Windows editors work.
 	text := strings.ReplaceAll(string(data), "\r\n", "\n")
-	lines := strings.Split(strings.TrimSpace(text), "\n")
-	if len(lines) < 2 {
-		return nil, "", exitcode.Wrap(exitcode.Parse, errors.New("signer: key file too short"))
+	// Collect non-empty lines after trimming whitespace.
+	var lines []string
+	for _, raw := range strings.Split(text, "\n") {
+		trimmed := strings.TrimSpace(raw)
+		if trimmed == "" {
+			continue
+		}
+		lines = append(lines, trimmed)
 	}
-	header := strings.TrimSpace(lines[0])
-	body := strings.TrimSpace(lines[1])
+	if len(lines) < 2 {
+		return nil, "", exitcode.Wrap(exitcode.Parse, errors.New("signer: key file too short: want 2 non-empty lines"))
+	}
+	if len(lines) > 2 {
+		return nil, "", exitcode.Wrap(exitcode.Parse, errors.New("signer: malformed key: unexpected trailing data"))
+	}
+	header := lines[0]
+	body := lines[1]
 	key, err := base64.StdEncoding.DecodeString(body)
 	if err != nil {
 		return nil, "", exitcode.Wrap(exitcode.Parse, fmt.Errorf("signer: bad base64: %w", err))

@@ -25,6 +25,11 @@ func newAddCmd(state *rootState) *cobra.Command {
 			if err != nil {
 				return err
 			}
+			// Reject supply-chain probes at write-time, too. An `add` with a
+			// malicious argument must never poison skillpack.yaml.
+			if err := manifest.ValidateSkillPath(args[0]); err != nil {
+				return err
+			}
 			added := w.AddSkillPath(args[0])
 			if !added {
 				fmt.Fprintf(state.stdout, "skillpack: %q already in workspace\n", args[0])

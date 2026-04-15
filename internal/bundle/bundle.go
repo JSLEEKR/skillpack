@@ -179,8 +179,25 @@ func WriteFile(path string, data []byte) error {
 	return nil
 }
 
+// inspectMaxEntries caps the number of tar headers Inspect will read from
+// an untrusted bundle. Our own bundler produces at most 1 + N_skills entries
+// (manifest.json + one per skill); 10,000 is generous enough for all real
+// bundles while bounding a tar-bomb on `bundle --list`.
+const inspectMaxEntries = 10000
+
+// inspectMaxEntrySize bounds the size any single entry may claim. Headers
+// claiming more than 1 GiB per file are rejected outright — Inspect does
+// not read entry bodies, so a huge-size claim is almost certainly a crafted
+// bundle trying to mislead downstream tooling.
+const inspectMaxEntrySize = 1 << 30
+
 // Inspect returns a human-readable listing of the entries in a bundle, used
-// for `skillpack bundle --list` debugging.
+// for `skillpack bundle --list`. Hardened against tainted input:
+//   - caps total entry count (inspectMaxEntries)
+//   - rejects non-regular entries (symlink, hardlink, device, fifo, ...)
+//   - runs assertSafePath on every name (rejects absolute paths, "..", drive
+//     letters, and NUL bytes)
+//   - caps per-entry claimed size
 func Inspect(data []byte) ([]string, error) {
 	gz, err := gzip.NewReader(bytes.NewReader(data))
 	if err != nil {
@@ -189,12 +206,26 @@ func Inspect(data []byte) ([]string, error) {
 	defer gz.Close()
 	tr := tar.NewReader(gz)
 	out := []string{}
+	count := 0
 	for {
 		hdr, err := tr.Next()
 		if err == io.EOF {
 			break
 		}
 		if err != nil {
+			return nil, exitcode.Wrap(exitcode.Parse, fmt.Errorf("bundle inspect: %w", err))
+		}
+		count++
+		if count > inspectMaxEntries {
+			return nil, exitcode.Wrap(exitcode.Parse, fmt.Errorf("bundle inspect: too many entries (>%d)", inspectMaxEntries))
+		}
+		if hdr.Typeflag != tar.TypeReg && hdr.Typeflag != tar.TypeRegA {
+			return nil, exitcode.Wrap(exitcode.Parse, fmt.Errorf("bundle inspect: unsupported entry type %q for %q", hdr.Typeflag, hdr.Name))
+		}
+		if hdr.Size < 0 || hdr.Size > inspectMaxEntrySize {
+			return nil, exitcode.Wrap(exitcode.Parse, fmt.Errorf("bundle inspect: entry %q has invalid size %d", hdr.Name, hdr.Size))
+		}
+		if err := assertSafePath(hdr.Name); err != nil {
 			return nil, exitcode.Wrap(exitcode.Parse, fmt.Errorf("bundle inspect: %w", err))
 		}
 		out = append(out, fmt.Sprintf("%s (%d bytes)", hdr.Name, hdr.Size))

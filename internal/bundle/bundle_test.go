@@ -204,6 +204,66 @@ func TestBundleMultipleFormats(t *testing.T) {
 	}
 }
 
+// Eval Cycle B — B4. Inspect on a tainted bundle must refuse traversal
+// names, non-regular entry types, and unreasonably large entry counts.
+func TestInspectRejectsTraversalEntry(t *testing.T) {
+	bad := makeTarGz(t, []tar.Header{
+		{Name: "../evil", Size: 0, Mode: 0644, Typeflag: tar.TypeReg},
+	})
+	if _, err := Inspect(bad); err == nil {
+		t.Errorf("Inspect accepted ../evil entry")
+	}
+}
+
+func TestInspectRejectsAbsoluteEntry(t *testing.T) {
+	bad := makeTarGz(t, []tar.Header{
+		{Name: "/etc/passwd", Size: 0, Mode: 0644, Typeflag: tar.TypeReg},
+	})
+	if _, err := Inspect(bad); err == nil {
+		t.Errorf("Inspect accepted absolute path entry")
+	}
+}
+
+func TestInspectRejectsSymlinkEntry(t *testing.T) {
+	bad := makeTarGz(t, []tar.Header{
+		{Name: "link", Size: 0, Mode: 0644, Typeflag: tar.TypeSymlink, Linkname: "/etc/passwd"},
+	})
+	if _, err := Inspect(bad); err == nil {
+		t.Errorf("Inspect accepted symlink entry")
+	}
+}
+
+func TestInspectRejectsDriveLetterEntry(t *testing.T) {
+	bad := makeTarGz(t, []tar.Header{
+		{Name: `C:\Windows\System32\evil`, Size: 0, Mode: 0644, Typeflag: tar.TypeReg},
+	})
+	if _, err := Inspect(bad); err == nil {
+		t.Errorf("Inspect accepted drive-letter entry")
+	}
+}
+
+// makeTarGz builds a tar.gz with the given headers and zero-length bodies.
+// Used only to produce tainted inputs for Inspect tests.
+func makeTarGz(t *testing.T, hdrs []tar.Header) []byte {
+	t.Helper()
+	var buf bytes.Buffer
+	gzw := gzip.NewWriter(&buf)
+	tw := tar.NewWriter(gzw)
+	for i := range hdrs {
+		h := hdrs[i]
+		if err := tw.WriteHeader(&h); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := tw.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if err := gzw.Close(); err != nil {
+		t.Fatal(err)
+	}
+	return buf.Bytes()
+}
+
 func readEntries(data []byte) (map[string][]byte, error) {
 	gz, err := gzip.NewReader(bytes.NewReader(data))
 	if err != nil {

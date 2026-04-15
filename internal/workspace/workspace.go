@@ -80,17 +80,38 @@ func Load(root string) (*Loaded, error) {
 // Discover walks the given patterns (relative to root) and returns every
 // file that looks like a skill source. Supports both glob patterns
 // (e.g. "skills/*") and directory paths (recursive walk).
+//
+// Every pattern is constrained to the workspace root: patterns that are
+// absolute, contain "..", or resolve (post-symlink) outside root are rejected
+// with a Parse error. This is the second line of defense after
+// manifest.ValidateSkillPath, and it catches symlinks to outside the tree
+// that only show up after the filesystem is consulted.
 func Discover(root string, patterns []string) ([]string, error) {
+	absRoot, err := filepath.Abs(root)
+	if err != nil {
+		return nil, exitcode.Wrap(exitcode.IO, fmt.Errorf("workspace: abs root: %w", err))
+	}
+	// Resolve symlinks in the root so that comparisons below are stable
+	// when the workspace itself lives under a symlink (e.g. /tmp on macOS).
+	if resolved, err := filepath.EvalSymlinks(absRoot); err == nil {
+		absRoot = resolved
+	}
 	seen := make(map[string]struct{})
 	var out []string
 	for _, p := range patterns {
-		abs := p
-		if !filepath.IsAbs(p) {
-			abs = filepath.Join(root, p)
+		if err := manifest.ValidateSkillPath(p); err != nil {
+			return nil, err
+		}
+		abs := filepath.Join(absRoot, p)
+		// Ensure the raw joined path still lives inside root BEFORE touching
+		// the filesystem — filepath.Join strips "..", so we re-check with Rel
+		// against absRoot.
+		if rel, err := filepath.Rel(absRoot, abs); err != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
+			return nil, exitcode.Wrap(exitcode.Parse, fmt.Errorf("workspace: skills path escapes workspace: %q", p))
 		}
 		// If it's a literal directory, walk it.
 		if fi, err := os.Stat(abs); err == nil && fi.IsDir() {
-			files, err := walkSkills(abs)
+			files, err := walkSkills(abs, absRoot)
 			if err != nil {
 				return nil, err
 			}
@@ -113,7 +134,7 @@ func Discover(root string, patterns []string) ([]string, error) {
 				continue
 			}
 			if fi.IsDir() {
-				files, err := walkSkills(m)
+				files, err := walkSkills(m, absRoot)
 				if err != nil {
 					return nil, err
 				}
@@ -126,6 +147,9 @@ func Discover(root string, patterns []string) ([]string, error) {
 				continue
 			}
 			if parser.DetectFormat(m) != skill.FormatUnknown {
+				if err := assertInsideRoot(m, absRoot); err != nil {
+					return nil, err
+				}
 				if _, dup := seen[m]; !dup {
 					seen[m] = struct{}{}
 					out = append(out, m)
@@ -137,9 +161,28 @@ func Discover(root string, patterns []string) ([]string, error) {
 	return out, nil
 }
 
+// assertInsideRoot refuses paths that, after symlink evaluation, sit outside
+// the workspace root. Called on every file matched by a glob or discovered by
+// the walker — the last line of defense for the B1 class of supply-chain
+// probes (symlinks that point at /etc or C:\Windows\System32).
+func assertInsideRoot(path, absRoot string) error {
+	resolved, err := filepath.EvalSymlinks(path)
+	if err != nil {
+		// If the symlink target does not exist, err here; surface as Parse
+		// so callers don't treat it as a bug in the tool.
+		return exitcode.Wrap(exitcode.Parse, fmt.Errorf("workspace: cannot resolve symlink %q: %w", path, err))
+	}
+	rel, err := filepath.Rel(absRoot, resolved)
+	if err != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) || filepath.IsAbs(rel) {
+		return exitcode.Wrap(exitcode.Parse, fmt.Errorf("workspace: path escapes workspace: %q", path))
+	}
+	return nil
+}
+
 // walkSkills recursively walks a directory and returns every skill source
-// file (any supported format).
-func walkSkills(dir string) ([]string, error) {
+// file (any supported format). Any discovered file that (after symlink
+// resolution) lives outside absRoot is rejected with a Parse error.
+func walkSkills(dir, absRoot string) ([]string, error) {
 	var out []string
 	err := filepath.WalkDir(dir, func(path string, d fs.DirEntry, err error) error {
 		if err != nil {
@@ -156,6 +199,11 @@ func walkSkills(dir string) ([]string, error) {
 			return nil
 		}
 		if parser.DetectFormat(path) != skill.FormatUnknown {
+			if absRoot != "" {
+				if err := assertInsideRoot(path, absRoot); err != nil {
+					return err
+				}
+			}
 			out = append(out, path)
 		}
 		return nil
