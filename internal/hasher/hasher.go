@@ -110,4 +110,3 @@ func HashBytes(data []byte) string {
 func Equal(a, b string) bool {
 	return strings.EqualFold(strings.TrimSpace(a), strings.TrimSpace(b))
 }
-

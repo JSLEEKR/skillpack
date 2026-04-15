@@ -132,6 +132,21 @@ func Unmarshal(data []byte) (*Lockfile, error) {
 	if lf.Version > CurrentVersion {
 		return nil, exitcode.Wrap(exitcode.Parse, fmt.Errorf("lockfile parse: unsupported version %d (max %d)", lf.Version, CurrentVersion))
 	}
+	// K fix: reject lockfiles that contain two entries with the same skill
+	// name. The canonical lockfile produced by FromSkills cannot contain
+	// duplicates (maps de-dup by name upstream), so a duplicate here always
+	// means a hand-edit or concurrent-write corruption. Prior behavior:
+	// Unmarshal accepted the file, LookupSkill returned the first entry via
+	// linear scan, and the second entry became invisible — verify could not
+	// detect drift for the hidden skill. Reject explicitly so the corruption
+	// surfaces as a Parse error instead of silent data loss.
+	seen := make(map[string]struct{}, len(lf.Skills))
+	for _, e := range lf.Skills {
+		if _, dup := seen[e.Name]; dup {
+			return nil, exitcode.Wrap(exitcode.Parse, fmt.Errorf("lockfile parse: duplicate skill name %q", e.Name))
+		}
+		seen[e.Name] = struct{}{}
+	}
 	return &lf, nil
 }
 

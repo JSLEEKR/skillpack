@@ -6,8 +6,8 @@
 // a test without updating the docs, or removes a cycle record, this package
 // fails fast.
 //
-// The pinned count is 218 (the actual count after Cycle J adds the
-// snake_case JSON schema regression test and this meta-meta self-check).
+// The pinned count is 220 (the actual count after Cycle K adds two
+// lockfile-duplicate regression tests on top of Cycle J's 218).
 // Whenever a test is added or removed, update BOTH the docs AND the
 // constants below in lockstep — that is the contract the meta-tests
 // enforce. TestDocsmetaTestSelfConsistent adds a second layer: even the
@@ -45,21 +45,21 @@ func readFile(t *testing.T, path string) string {
 }
 
 // TestROUND_LOGClaimsMatchReality pins the ROUND_LOG test count statement
-// to the actual test count of 218. Update this number (and the docs) in
+// to the actual test count of 220. Update this number (and the docs) in
 // lockstep when tests are added.
 func TestROUND_LOGClaimsMatchReality(t *testing.T) {
 	root := repoRoot(t)
 	body := readFile(t, filepath.Join(root, "ROUND_LOG.md"))
 	// Must mention the current test count.
-	if !strings.Contains(body, "218 tests") {
-		t.Errorf("ROUND_LOG.md does not mention '218 tests' — doc drift")
+	if !strings.Contains(body, "220 tests") {
+		t.Errorf("ROUND_LOG.md does not mention '220 tests' — doc drift")
 	}
 	// Must NOT still carry the stale 205 count.
 	if strings.Contains(body, "205 tests") {
 		t.Errorf("ROUND_LOG.md still contains stale '205 tests' claim")
 	}
 	// Must record every cycle that shipped a fix, not just A/B.
-	for _, cycle := range []string{"Cycle C", "Cycle E", "Cycle G", "Cycle H", "Cycle J"} {
+	for _, cycle := range []string{"Cycle C", "Cycle E", "Cycle G", "Cycle H", "Cycle J", "Cycle K"} {
 		if !strings.Contains(body, cycle) {
 			t.Errorf("ROUND_LOG.md missing record of %s", cycle)
 		}
@@ -70,8 +70,8 @@ func TestROUND_LOGClaimsMatchReality(t *testing.T) {
 func TestCHANGELOGClaimsMatchReality(t *testing.T) {
 	root := repoRoot(t)
 	body := readFile(t, filepath.Join(root, "CHANGELOG.md"))
-	if !strings.Contains(body, "218 tests") {
-		t.Errorf("CHANGELOG.md does not mention '218 tests' — doc drift")
+	if !strings.Contains(body, "220 tests") {
+		t.Errorf("CHANGELOG.md does not mention '220 tests' — doc drift")
 	}
 	if strings.Contains(body, "**205 tests**") {
 		t.Errorf("CHANGELOG.md still contains stale '205 tests' claim")
@@ -84,8 +84,8 @@ func TestCHANGELOGClaimsMatchReality(t *testing.T) {
 func TestREADMEClaimsMatchReality(t *testing.T) {
 	root := repoRoot(t)
 	body := readFile(t, filepath.Join(root, "README.md"))
-	if !strings.Contains(body, "218 tests across all layers") {
-		t.Errorf("README.md does not mention '218 tests across all layers' — doc drift")
+	if !strings.Contains(body, "220 tests across all layers") {
+		t.Errorf("README.md does not mention '220 tests across all layers' — doc drift")
 	}
 	// Badge URL should not still say 188.
 	if strings.Contains(body, "tests-188") {
@@ -103,7 +103,7 @@ func TestDocsmetaTestSelfConsistent(t *testing.T) {
 	root := repoRoot(t)
 	src := readFile(t, filepath.Join(root, "internal", "docsmeta", "docsmeta_test.go"))
 	// The asserted constant; if this ever moves, update the source too.
-	const currentCount = "218"
+	const currentCount = "220"
 	// Any line must only reference `currentCount tests`, `currentCount tests across all layers`,
 	// or the explicitly-rejected historicals below.
 	rejectedHistoricals := map[string]bool{

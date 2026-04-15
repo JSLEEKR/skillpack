@@ -197,3 +197,42 @@ func TestWriteFileOverwrite(t *testing.T) {
 		t.Errorf("overwrite failed: %s", string(data))
 	}
 }
+
+// Cycle K regression. A hand-edited lockfile containing two entries with
+// the same skill name must be rejected at parse time. Previously Unmarshal
+// accepted the file silently, the linear-scan LookupSkill returned only the
+// first matching entry, and the second entry became invisible — verify could
+// not detect drift in the hidden skill. The canonical lockfile produced by
+// FromSkills never contains duplicates, so any duplicate on disk is
+// corruption or hand-edit and must surface as a Parse error.
+func TestUnmarshalRejectsDuplicateSkillNames(t *testing.T) {
+	data := []byte(`{"version":1,"generated_by":"skillpack","skills":[
+		{"name":"alpha","version":"1.0.0","format":"skill.md","hash":"sha256:aaa","source":"./a/SKILL.md"},
+		{"name":"alpha","version":"2.0.0","format":"skill.md","hash":"sha256:bbb","source":"./b/SKILL.md"}
+	]}`)
+	_, err := Unmarshal(data)
+	if err == nil {
+		t.Fatal("expected duplicate-name error, got nil")
+	}
+	if !strings.Contains(err.Error(), "duplicate skill name") {
+		t.Errorf("unexpected error: %v", err)
+	}
+	if !strings.Contains(err.Error(), `"alpha"`) {
+		t.Errorf("error should name the duplicate skill: %v", err)
+	}
+}
+
+// Baseline: a well-formed lockfile with distinct names still parses.
+func TestUnmarshalAcceptsDistinctNames(t *testing.T) {
+	data := []byte(`{"version":1,"generated_by":"skillpack","skills":[
+		{"name":"alpha","version":"1.0.0","format":"skill.md","hash":"sha256:aaa","source":"./a/SKILL.md"},
+		{"name":"beta","version":"1.0.0","format":"skill.md","hash":"sha256:bbb","source":"./b/SKILL.md"}
+	]}`)
+	lf, err := Unmarshal(data)
+	if err != nil {
+		t.Fatalf("Unmarshal: %v", err)
+	}
+	if len(lf.Skills) != 2 {
+		t.Errorf("expected 2 skills, got %d", len(lf.Skills))
+	}
+}

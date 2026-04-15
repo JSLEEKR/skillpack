@@ -412,15 +412,15 @@ internal dependencies.
 
 ## Test Coverage
 
-218 tests across all layers:
+220 tests across all layers:
 
 | Package | Tests | What it covers |
 |---|---|---|
 | `parser` | 32 | All four formats, CRLF, BOM, missing fields, bad YAML, requires (list/map), v-prefix versions |
 | `cli` | 27 | init, add, resolve, install, verify (clean/drift), bundle, sign, keygen, lock, JSON output, error paths |
+| `lockfile` | 19 | Roundtrip, sort order, LF only, trailing newline, missing/negative/future version, atomic write, duplicate-name rejection (Cycle K) |
 | `semver` | 17 | Caret, tilde, comparators, x-ranges, BestMatch, normalize, edge cases |
 | `hasher` | 17 | Determinism, frontmatter order, tools/requires order, body/version/name sensitivity, collision-resistance across comma/pipe/`=`/newline ambiguity |
-| `lockfile` | 17 | Roundtrip, sort order, LF only, trailing newline, missing/negative/future version, atomic write |
 | `signer` | 16 | Generate, sign, verify, tampered, wrong key, CRLF in key file, file roundtrip, trailing garbage, multi-line body |
 | `bundle` | 16 | Determinism, multiple formats, header validation, path safety, list mode, tainted-archive hardening |
 | `skill` | 16 | Canonical record validation, name rules (`.`/`..`/leading-dot/whitespace), constraint parsing, sorting |

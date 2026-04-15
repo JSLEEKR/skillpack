@@ -20,8 +20,8 @@ type agentMDFrontmatter struct {
 	Author      string      `yaml:"author"`
 	Tools       []string    `yaml:"tools"`
 	Requires    interface{} `yaml:"requires"`
-	Vendor      string      `yaml:"vendor"`     // "anthropic", "cursor", "openai", ...
-	Models      []string    `yaml:"models"`     // ["claude-3.5", "gpt-4o"]
+	Vendor      string      `yaml:"vendor"` // "anthropic", "cursor", "openai", ...
+	Models      []string    `yaml:"models"` // ["claude-3.5", "gpt-4o"]
 	Permissions []string    `yaml:"permissions"`
 }
 

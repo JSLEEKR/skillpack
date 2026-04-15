@@ -80,10 +80,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   and rejects any non-comment `NNN tests` mismatch with the current
   pinned count.
 
+### Lockfile integrity (Eval Cycle K)
+
+- `lockfile.Unmarshal` rejects lockfiles containing two entries with the
+  same skill name. Previously accepted silently; the linear-scan
+  `LookupSkill` returned only the first match, making the second entry
+  invisible to `verify`. The canonical lockfile produced by `FromSkills`
+  never contains duplicates (the resolver rejects them upstream), so a
+  duplicate on disk is always corruption or a hand-edit and must surface
+  as a Parse error. Pinned by `TestUnmarshalRejectsDuplicateSkillNames`.
+- `gofmt -w` applied to `internal/hasher/hasher.go`,
+  `internal/parser/agentmd.go`, and `internal/parser/parser_test.go` —
+  three cosmetic drifts (trailing blank line and two struct-tag column
+  alignments) that `gofmt -l` flagged but no prior CI step ran.
+
 ### Quality
 
-- **218 tests** across unit and integration layers (192 initial + 26
-  across Eval Cycles B through J, including 4 doc-accuracy meta-tests
-  and one snake_case JSON schema regression pin).
-- `go vet` clean, race-detector clean.
+- **220 tests** across unit and integration layers (192 initial + 28
+  across Eval Cycles B through K, including 4 doc-accuracy meta-tests,
+  one snake_case JSON schema regression pin, and two lockfile-duplicate
+  regression pins).
+- `go vet` clean, race-detector clean, `gofmt -l` clean.
 - Cross-platform: tested on Windows, Linux, macOS paths.

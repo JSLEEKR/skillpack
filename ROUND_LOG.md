@@ -37,7 +37,7 @@ gzipped tarball → ed25519 detached signatures → CI drift verifier.
 | `internal/exitcode` | 80 | 8 | typed errors → exit codes |
 | `internal/docsmeta` | 110 | 4 | doc accuracy meta-tests (Cycle H, J) |
 
-Total: ~5,720 lines of Go, **218 tests** (192 initial + 26 added across Eval Cycles B through J).
+Total: ~5,720 lines of Go, **220 tests** (192 initial + 28 added across Eval Cycles B through K).
 
 ## Dependencies (exactly three, plus pflag transitively from cobra)
 
@@ -49,7 +49,7 @@ Total: ~5,720 lines of Go, **218 tests** (192 initial + 26 added across Eval Cyc
 
 - `go build ./...` — clean
 - `go vet ./...` — clean
-- `go test ./...` — all 218 tests pass (race-clean, vet-clean)
+- `go test ./...` — all 220 tests pass (race-clean, vet-clean)
 - `go test -race ./...` — race-detector clean
 - `go mod tidy && git diff --exit-code` — clean (no dep drift)
 - Binary size 4.2 MB (target: < 15 MB) — passed
@@ -279,6 +279,35 @@ hash drift, bundle tar header compliance (`tar -tvf`: mode 0644, uid/gid
 0/0, deterministic 1970-01-02 mtime), semver prerelease ordering per
 semver.org (`01` / `00` leading-zero rejection, `alpha.beta > alpha`),
 CLI `--version` / `version` subcommand / no-args (sensible exit codes).
+
+## Eval Cycle K — fixes applied
+
+Cycle K found two bugs:
+
+- **K1 (medium)** — `lockfile.Unmarshal` silently accepted lockfiles with
+  two entries sharing the same skill name. Because `LookupSkill` is a
+  linear scan that returns the first match, the second entry became
+  invisible — `verify` could not detect drift for the hidden skill. The
+  canonical lockfile produced by `FromSkills` never contains duplicates
+  (the resolver rejects them upstream), so a duplicate on disk is always
+  corruption or a hand-edit. Fix: reject duplicates in `Unmarshal` with a
+  Parse-class error naming the offending skill. Pinned by
+  `TestUnmarshalRejectsDuplicateSkillNames` and a companion positive test
+  `TestUnmarshalAcceptsDistinctNames`.
+- **K2 (cosmetic)** — three source files (`internal/hasher/hasher.go`,
+  `internal/parser/agentmd.go`, `internal/parser/parser_test.go`) failed
+  `gofmt -l`: a trailing blank line and two alignment drifts inside
+  struct-tag columns. Not caught by any prior cycle because none ran
+  `gofmt -l`. Fix: `gofmt -w` on the three files; no semantic change.
+
+Cycle K probes (all verified): help text vs wired flags for every
+subcommand (match), `os.Exit` call sites (only `cmd/skillpack/main.go`,
+all other exits go through `exitcode.Classify`), `skillpack --version`
+(injected via `-ldflags -X` with `dev` default), `bundle --list` after
+sign (bundle remains readable, signature is a detached `.sig`), sign
+with key-A verify with key-B (correctly exits 6 with "signature does
+not verify"), docsmeta self-drift probe in a sandbox (flipping `218 tests`
+→ `219 tests` in ROUND_LOG fires `TestROUND_LOGClaimsMatchReality`).
 
 ## Files created
 

@@ -11,19 +11,19 @@ import (
 
 func TestDetectFormat(t *testing.T) {
 	tests := map[string]skill.Format{
-		"SKILL.md":                  skill.FormatSkillMD,
-		"skill.md":                  skill.FormatSkillMD,
-		"path/to/SKILL.md":          skill.FormatSkillMD,
-		"code-review.SKILL.md":      skill.FormatSkillMD,
-		".cursorrules":              skill.FormatCursorRules,
-		"foo/.cursorrules":          skill.FormatCursorRules,
-		"AGENT.md":                  skill.FormatAgentMD,
-		"agent.md":                  skill.FormatAgentMD,
-		"my-bot.AGENT.md":           skill.FormatAgentMD,
-		"skill.yaml":                skill.FormatSkillYAML,
-		"skill.yml":                 skill.FormatSkillYAML,
-		"random.txt":                skill.FormatUnknown,
-		"foo.md":                    skill.FormatUnknown,
+		"SKILL.md":             skill.FormatSkillMD,
+		"skill.md":             skill.FormatSkillMD,
+		"path/to/SKILL.md":     skill.FormatSkillMD,
+		"code-review.SKILL.md": skill.FormatSkillMD,
+		".cursorrules":         skill.FormatCursorRules,
+		"foo/.cursorrules":     skill.FormatCursorRules,
+		"AGENT.md":             skill.FormatAgentMD,
+		"agent.md":             skill.FormatAgentMD,
+		"my-bot.AGENT.md":      skill.FormatAgentMD,
+		"skill.yaml":           skill.FormatSkillYAML,
+		"skill.yml":            skill.FormatSkillYAML,
+		"random.txt":           skill.FormatUnknown,
+		"foo.md":               skill.FormatUnknown,
 	}
 	for name, want := range tests {
 		if got := DetectFormat(name); got != want {
@@ -53,11 +53,11 @@ func TestNormalizeText(t *testing.T) {
 
 func TestSplitFrontmatter(t *testing.T) {
 	tests := []struct {
-		name      string
-		in        string
-		wantFm    string
-		wantBody  string
-		wantOK    bool
+		name     string
+		in       string
+		wantFm   string
+		wantBody string
+		wantOK   bool
 	}{
 		{"happy", "---\nname: x\n---\nbody\n", "name: x", "body\n", true},
 		{"empty fm", "---\n\n---\nbody\n", "", "body\n", true},
